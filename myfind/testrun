@@ -1,0 +1,2 @@
+g++ myfind.cpp 
+./myfind test test2 test3
