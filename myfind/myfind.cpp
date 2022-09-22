@@ -26,7 +26,7 @@ namespace fs = std::filesystem;
 char *program_name = nullptr;
 
 void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
-                      bool isRecursive, bool ignoresCase, int error);
+                      bool &isRecursive, bool &ignoresCase, int error);
 
 bool contains(std::vector<std::string> &targets, const std::string &filename);
 
@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
         }
 
         std::string filename01 = originalFilename;
-        if (false) {
+        if (ignoresCase) {
             filename01 = toLower(originalFilename);
             for (auto &target: targets) {
                 target = toLower(target);
@@ -110,7 +110,7 @@ bool contains(std::vector<std::string> &targets, const std::string &filename) {
 }
 
 void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
-                      bool isRecursive, bool ignoresCase, int error) {
+                      bool &isRecursive, bool &ignoresCase, int error) {
     while ((c = getopt(argc, argv, "iR")) != EOF) {
         switch (c) {
             case 'i':        /* Option ohne Argument */
