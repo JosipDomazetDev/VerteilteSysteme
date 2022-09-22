@@ -17,7 +17,8 @@
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
-
+#include <time.h>
+#include <sys/stat.h>
 
 namespace fs = std::filesystem;
 
@@ -32,11 +33,18 @@ bool contains(std::vector<std::string> &targets, const std::string &filename);
 
 std::string toLower(std::string &filename);
 
+void
+handleCase(std::vector<std::string> &targets, bool ignoresCase, std::string &originalFilename, std::string &filename01);
+
+void
+traverseDirectory(const std::string &searchPath, std::vector<std::string> &targets, bool isRecursive, bool ignoresCase);
+
 /* Funktion print_usage() zur Ausgabe der usage Meldung */
 void print_usage() {
     fprintf(stderr, "Usage: %s [-R] [-i] searchpath filename1 [filename2] ...[filenameN] \n", program_name);
     exit(EXIT_FAILURE);
 }
+
 
 /* main Funktion mit Argumentbehandlung */
 int main(int argc, char *argv[]) {
@@ -52,6 +60,22 @@ int main(int argc, char *argv[]) {
 
     extractArguments(argc, argv, searchPath, targets, c, isRecursive, ignoresCase, error);
 
+    traverseDirectory(searchPath, targets, isRecursive, ignoresCase);
+
+
+    //    for (const auto &entry: fs::directory_iterator(searchPath)) {
+//
+//        std::cout << std::to_string(pid) + ":" + entry.path().filename().string() << std::endl;
+//        printf("\n%d: %s", pid, entry.path().filename().c_str());
+//    }
+
+
+    return EXIT_SUCCESS;
+}
+
+void
+traverseDirectory(const std::string &searchPath, std::vector<std::string> &targets, bool isRecursive,
+                  bool ignoresCase) {
     int pid = getpid();
 
     DIR *dirp;
@@ -60,7 +84,8 @@ int main(int argc, char *argv[]) {
 
     if ((dirp = opendir(searchPath.c_str())) == nullptr) {
         perror("Failed to open directory");
-        return 1;
+//        return 1;
+        return;
     }
 
 
@@ -70,31 +95,48 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        std::string filename01 = originalFilename;
-        if (ignoresCase) {
-            filename01 = toLower(originalFilename);
-            for (auto &target: targets) {
-                target = toLower(target);
+        std::string filename01;
+        handleCase(targets, ignoresCase, originalFilename, filename01);
+
+        std::string fullPath = searchPath;
+        fullPath.append("/");
+        fullPath.append(originalFilename);
+
+
+            struct stat statbuf{};
+            if (stat(fullPath.c_str(), &statbuf) == -1) {
+                perror("Failed to get file status");
+            } else {
+                if (statbuf.st_mode & S_IFDIR) {
+                    if (isRecursive) {
+                        traverseDirectory(fullPath, targets, isRecursive, ignoresCase);
+                    }
+
+                    //it's a directory
+                } else if (statbuf.st_mode & S_IFREG) {
+                    if (contains(targets, filename01)) {
+                        printf("%d: %s: %s\n", pid, originalFilename.c_str(), fullPath.c_str());
+                    } else {
+                        // DO NOTHING
+                    }
+                } else {
+                    //something else
+                }
+
             }
-        }
-
-        if (contains(targets, filename01)) {
-            printf("%d: %s: %s\n", pid, originalFilename.c_str(), originalFilename.c_str());
-        } else {
-            // DO NOTHING
-        }
-
     }
     while ((closedir(dirp) == -1) && (errno == EINTR)) { ; }
+}
 
-//    for (const auto &entry: fs::directory_iterator(searchPath)) {
-//
-//        std::cout << std::to_string(pid) + ":" + entry.path().filename().string() << std::endl;
-//        printf("\n%d: %s", pid, entry.path().filename().c_str());
-//    }
-
-
-    return EXIT_SUCCESS;
+void handleCase(std::vector<std::string> &targets, bool ignoresCase, std::string &originalFilename,
+                std::string &filename01) {
+    filename01 = originalFilename;
+    if (ignoresCase) {
+        filename01 = toLower(originalFilename);
+        for (auto &target: targets) {
+            target = toLower(target);
+        }
+    }
 }
 
 std::string toLower(std::string &filename) {
@@ -154,7 +196,7 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
     std::cout << "searchPath: " + searchPath << std::endl;
     std::cout << "\nTargets: " << std::endl;
 
-    for (auto & target : targets) {
+    for (auto &target: targets) {
         std::cout << target << std::endl;
     }
     std::cout << "\n" << std::endl;
