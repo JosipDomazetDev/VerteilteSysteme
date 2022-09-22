@@ -9,15 +9,28 @@
 #include <stdlib.h>
 #include <iostream>
 #include <assert.h>
-#include <string>
 #include <vector>
 #include <istream>
+#include <string>
+#include <iostream>
+#include <filesystem>
+#include <dirent.h>
+#include <errno.h>
+#include <stdio.h>
+
+
+namespace fs = std::filesystem;
+
 
 /* globale Variable fuer den Programmnamen */
 char *program_name = nullptr;
 
 void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
                       bool isRecursive, bool ignoresCase, int error);
+
+bool contains(std::vector<std::string> &targets, const std::string &filename);
+
+std::string toLower(std::string &filename);
 
 /* Funktion print_usage() zur Ausgabe der usage Meldung */
 void print_usage() {
@@ -30,7 +43,7 @@ int main(int argc, char *argv[]) {
     std::string searchPath;
     std::vector<std::string> targets = {};
 
-    int c= 0;
+    int c = 0;
     bool isRecursive = false;
     bool ignoresCase = false;
     int error = 0;
@@ -39,9 +52,61 @@ int main(int argc, char *argv[]) {
 
     extractArguments(argc, argv, searchPath, targets, c, isRecursive, ignoresCase, error);
 
+    int pid = getpid();
+
+    DIR *dirp;
+    struct dirent *direntp;
+
+
+    if ((dirp = opendir(searchPath.c_str())) == nullptr) {
+        perror("Failed to open directory");
+        return 1;
+    }
+
+
+    while ((direntp = readdir(dirp)) != nullptr) {
+        std::string originalFilename = direntp->d_name;
+        if (originalFilename.empty() || originalFilename == "." || originalFilename == "..") {
+            continue;
+        }
+
+        std::string filename01 = originalFilename;
+        if (false) {
+            filename01 = toLower(originalFilename);
+            for (auto &target: targets) {
+                target = toLower(target);
+            }
+        }
+
+        if (contains(targets, filename01)) {
+            printf("%d: %s: %s\n", pid, originalFilename.c_str(), originalFilename.c_str());
+        } else {
+            // DO NOTHING
+        }
+
+    }
+    while ((closedir(dirp) == -1) && (errno == EINTR)) { ; }
+
+//    for (const auto &entry: fs::directory_iterator(searchPath)) {
+//
+//        std::cout << std::to_string(pid) + ":" + entry.path().filename().string() << std::endl;
+//        printf("\n%d: %s", pid, entry.path().filename().c_str());
+//    }
 
 
     return EXIT_SUCCESS;
+}
+
+std::string toLower(std::string &filename) {
+    std::string copiedFilename = filename;
+    std::transform(copiedFilename.begin(), copiedFilename.end(), copiedFilename.begin(),
+                   [](unsigned char c) { return tolower(c); });
+
+    return copiedFilename;
+}
+
+bool contains(std::vector<std::string> &targets, const std::string &filename) {
+    return std::find(targets.begin(), targets.end(), filename) != targets.end();
 }
 
 void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
@@ -89,7 +154,9 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
     std::cout << "searchPath: " + searchPath << std::endl;
     std::cout << "\nTargets: " << std::endl;
 
-    for (unsigned int i = 0; i < targets.size(); i++) {
-        std::cout << targets[i] << std::endl;
+    for (auto & target : targets) {
+        std::cout << target << std::endl;
     }
+    std::cout << "\n" << std::endl;
+
 }
