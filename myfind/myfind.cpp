@@ -4,21 +4,24 @@
  * Verteilte Systeme
  */
 
-#include <stdio.h>
 #include <getopt.h>
-#include <stdlib.h>
 #include <iostream>
-#include <assert.h>
 #include <vector>
 #include <istream>
 #include <string>
 #include <iostream>
 #include <filesystem>
 #include <dirent.h>
-#include <errno.h>
-#include <stdio.h>
-#include <time.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <iostream>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <cassert>
 
 namespace fs = std::filesystem;
 
@@ -34,10 +37,10 @@ bool contains(std::vector<std::string> &targets, const std::string &filename);
 std::string toLower(std::string &filename);
 
 void
-handleCase(std::vector<std::string> &targets, bool ignoresCase, std::string &originalFilename, std::string &filename01);
+handleCase(std::string &targets, bool ignoresCase, std::string &originalFilename, std::string &filename01);
 
 void
-traverseDirectory(const std::string &searchPath, std::vector<std::string> &targets, bool isRecursive, bool ignoresCase);
+traverseDirectory(const std::string &searchPath, std::string &targets, bool isRecursive, bool ignoresCase);
 
 /* Funktion print_usage() zur Ausgabe der usage Meldung */
 void print_usage() {
@@ -60,7 +63,42 @@ int main(int argc, char *argv[]) {
 
     extractArguments(argc, argv, searchPath, targets, c, isRecursive, ignoresCase, error);
 
-    traverseDirectory(searchPath, targets, isRecursive, ignoresCase);
+
+    for (auto &target: targets) {
+        pid_t pid, wpid;
+        int status;
+
+        pid = fork();
+
+
+        switch (pid) {
+            case 1: /* error */
+                fprintf(stderr, "myfork: error when forking child process\n");
+                return EXIT_FAILURE;
+            case 0: /* child process */
+                traverseDirectory(searchPath, target, isRecursive, ignoresCase);
+                return 3;
+            default: /* parent */
+                while ((wpid = wait(&status)) != pid) {
+                    if (wpid != -1)
+                        continue; /* different child process has terminated, continue waiting */
+
+                    /* error waiting */
+                    fprintf(stderr, "myfork: error when waiting for child process\n");
+                    return EXIT_FAILURE;
+                }
+                /* check exit code of child after finishing */
+                if (WIFEXITED(status)) /* child has finished normally with exit code WEXITSTATUS(status) */
+                {
+                   // printf("Child has finished normally, exit code: %d\n", WEXITSTATUS(status));
+                } else /* child has finished with error */
+                {
+                    printf("Child process has finished with error or via signal\n");
+                }
+        }
+    }
+
+
 
 
     //    for (const auto &entry: fs::directory_iterator(searchPath)) {
@@ -74,7 +112,7 @@ int main(int argc, char *argv[]) {
 }
 
 void
-traverseDirectory(const std::string &searchPath, std::vector<std::string> &targets, bool isRecursive,
+traverseDirectory(const std::string &searchPath, std::string &target, bool isRecursive,
                   bool ignoresCase) {
     int pid = getpid();
 
@@ -96,46 +134,45 @@ traverseDirectory(const std::string &searchPath, std::vector<std::string> &targe
         }
 
         std::string filename01;
-        handleCase(targets, ignoresCase, originalFilename, filename01);
+        // not mutating originalFilename for output at the end
+        handleCase(target, ignoresCase, originalFilename, filename01);
 
         std::string fullPath = searchPath;
         fullPath.append("/");
         fullPath.append(originalFilename);
 
 
-            struct stat statbuf{};
-            if (stat(fullPath.c_str(), &statbuf) == -1) {
-                perror("Failed to get file status");
-            } else {
-                if (statbuf.st_mode & S_IFDIR) {
-                    if (isRecursive) {
-                        traverseDirectory(fullPath, targets, isRecursive, ignoresCase);
-                    }
-
-                    //it's a directory
-                } else if (statbuf.st_mode & S_IFREG) {
-                    if (contains(targets, filename01)) {
-                        printf("%d: %s: %s\n", pid, originalFilename.c_str(), fullPath.c_str());
-                    } else {
-                        // DO NOTHING
-                    }
-                } else {
-                    //something else
+        struct stat statbuf{};
+        if (stat(fullPath.c_str(), &statbuf) == -1) {
+            perror("Failed to get file status");
+        } else {
+            if (statbuf.st_mode & S_IFDIR) {
+                if (isRecursive) {
+                    traverseDirectory(fullPath, target, isRecursive, ignoresCase);
                 }
 
+                //it's a directory
+            } else if (statbuf.st_mode & S_IFREG) {
+                if (target == filename01) {
+                    printf("%d: %s: %s\n", pid, originalFilename.c_str(), fullPath.c_str());
+                } else {
+                    // DO NOTHING -- Nothing found
+                }
+            } else {
+                //something else
             }
+
+        }
     }
     while ((closedir(dirp) == -1) && (errno == EINTR)) { ; }
 }
 
-void handleCase(std::vector<std::string> &targets, bool ignoresCase, std::string &originalFilename,
+void handleCase(std::string &target, bool ignoresCase, std::string &originalFilename,
                 std::string &filename01) {
     filename01 = originalFilename;
     if (ignoresCase) {
         filename01 = toLower(originalFilename);
-        for (auto &target: targets) {
-            target = toLower(target);
-        }
+        target = toLower(target);
     }
 }
 
