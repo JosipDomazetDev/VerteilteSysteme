@@ -77,8 +77,7 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
         print_usage();
     }
 
-    if ((argc < optind + 1))
-    {
+    if ((argc < optind + 1)) {
         /* falsche Anzahl an Optionen */
         print_usage();
     }
@@ -124,7 +123,10 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
 
     // Open the contents of the directory specified in searchPath
     if ((dirp = opendir(searchPath.c_str())) == nullptr) {
-        perror("Failed to open directory");
+        std::string msg = "Failed to open directory ";
+        msg.append(searchPath);
+
+        perror(msg.c_str());
         return EXIT_FAILURE;
     }
 
@@ -141,7 +143,7 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
         // Handle the -i option
         handleCase(target, ignoresCase, originalFilename, sanitizedFilename);
 
-        // Keep track of the full path
+        // Keep track of the full path for the recursive search
         std::string fullPath = searchPath;
         fullPath.append("/");
         fullPath.append(originalFilename);
@@ -154,7 +156,11 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
             if (statbuf.st_mode & S_IFDIR) {
                 // It's a directory, traverse it recursively if user used -R
                 if (isRecursive) {
-                    traverseDirectory(fullPath, target, isRecursive, ignoresCase);
+                    int result = traverseDirectory(fullPath, target, isRecursive, ignoresCase);
+
+                    if (result == EXIT_FAILURE) {
+                        return EXIT_FAILURE;
+                    }
                 }
             } else if (statbuf.st_mode & S_IFREG) {
                 // It's a file, check if filename matches the target
@@ -169,7 +175,7 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
     while ((closedir(dirp) == -1) && (errno == EINTR)) { ; }
 
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 /* main Funktion mit Argumentbehandlung */
@@ -212,7 +218,7 @@ int main(int argc, char *argv[]) {
         /* check exit code of child after finishing */
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
             // traverseDirectory failed and returned error code
-            perror("Error while waiting for child process\n");
+            fprintf(stderr, "%s\n", "Error while waiting for child process");
         }
 
         if (wpid != -1)
