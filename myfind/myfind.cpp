@@ -22,7 +22,7 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
 std::string toLower(std::string &filename);
 
 void
-handleCase(std::string &targets, bool ignoresCase, std::string &originalFilename, std::string &filename01);
+handleCase(std::string &targets, bool ignoresCase, std::string &originalFilename, std::string &sanitizedFilename);
 
 int
 traverseDirectory(const std::string &searchPath, std::string &targets, bool isRecursive, bool ignoresCase);
@@ -41,12 +41,13 @@ std::string toLower(std::string &filename) {
     return copiedFilename;
 }
 
-// Handle lowercase -i option by simply converting both target and filename to lower case
+// Handle case insensitive -i option by simply converting both the target and the filename to lower case
+// Does not mutate the originalFilename to keep the output at the end unaffected
 void handleCase(std::string &target, bool ignoresCase, std::string &originalFilename,
-                std::string &filename01) {
-    filename01 = originalFilename;
+                std::string &sanitizedFilename) {
+    sanitizedFilename = originalFilename;
     if (ignoresCase) {
-        filename01 = toLower(originalFilename);
+        sanitizedFilename = toLower(originalFilename);
         target = toLower(target);
     }
 }
@@ -55,34 +56,41 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
                       bool &isRecursive, bool &ignoresCase, int error) {
     while ((c = getopt(argc, argv, "iR")) != EOF) {
         switch (c) {
-            case 'i':        /* Option ohne Argument */
+            case 'i':
                 ignoresCase = true;
                 break;
-            case 'R':                 /* Option mit Argument */
+            case 'R':
                 isRecursive = true;
                 break;
-            case '?': /* unguelgtiges Argument */
+            case '?':
+                /* unguelgtiges Argument */
                 error = 1;
                 break;
-            default: /* unmoegliech */
+            default:
+                /* unmoegliech */
                 assert(0);
         }
     }
-    if (error) /* Optionen fehlerhaft ? */
-    {
+
+    if (error) {
+        /* Optionen fehlerhaft ? */
         print_usage();
     }
-    if ((argc < optind + 1)) /* falsche Anzahl an Optionen */
+
+    if ((argc < optind + 1))
     {
+        /* falsche Anzahl an Optionen */
         print_usage();
     }
 
     while (optind < argc) {
-
         /* aktuelles Argument: argv[optind] */
+
         if (searchPath.empty()) {
+            // The first positional argument is the searchPath
             searchPath = argv[optind];
         } else {
+            // Once the searchPath has been set, the remaining arguments are targets, add them to a vector
             targets.emplace_back(argv[optind]);
         }
 
@@ -114,23 +122,26 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
     DIR *dirp;
     struct dirent *direntp;
 
-
+    // Open the contents of the directory specified in searchPath
     if ((dirp = opendir(searchPath.c_str())) == nullptr) {
         perror("Failed to open directory");
         return EXIT_FAILURE;
     }
 
-
     while ((direntp = readdir(dirp)) != nullptr) {
+        // Get the current filename
         std::string originalFilename = direntp->d_name;
+
         if (originalFilename.empty() || originalFilename == "." || originalFilename == "..") {
+            // Those are not actual files, ignore them
             continue;
         }
 
-        std::string filename01;
-        // not mutating originalFilename for output at the end
-        handleCase(target, ignoresCase, originalFilename, filename01);
+        std::string sanitizedFilename;
+        // Handle the -i option
+        handleCase(target, ignoresCase, originalFilename, sanitizedFilename);
 
+        // Keep track of the full path
         std::string fullPath = searchPath;
         fullPath.append("/");
         fullPath.append(originalFilename);
@@ -147,7 +158,8 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
                 }
             } else if (statbuf.st_mode & S_IFREG) {
                 // It's a file, check if filename matches the target
-                if (target == filename01) {
+                if (target == sanitizedFilename) {
+                    // We have a match -- print it
                     printf("%d: %s: %s\n", pid, originalFilename.c_str(), fullPath.c_str());
                 }
             }
@@ -172,25 +184,25 @@ int main(int argc, char *argv[]) {
 
     program_name = argv[0];
 
-    // Liest die Kommandozeilen-Parameter aus
+    // Read command lines arguments
     extractArguments(argc, argv, searchPath, targets, c, isRecursive, ignoresCase, error);
 
     pid_t pid, wpid;
     int status;
-    // Für jedes target wird nun ein fork erstellt. Der Kindproess sucht mit der Methode traverseDirectory nach Matches.
+
+    // Create a fork for each target. Each child process will call traverseDirectory to search for a match.
     for (auto &target: targets) {
 
         pid = fork();
 
-
         if (pid == 0) {
             // Child process returns result of traverseDirectory, therefore the code below will not be executed by the children
             return traverseDirectory(searchPath, target, isRecursive, ignoresCase);
+
         } else if (pid == -1) {
             perror("Forking failed\n");
             return EXIT_FAILURE;
         }
-
     }
 
 
@@ -206,11 +218,8 @@ int main(int argc, char *argv[]) {
         if (wpid != -1)
             continue; /* different child process has terminated, continue waiting */
 
-
-
         return EXIT_FAILURE;
     }
-
 
     return EXIT_SUCCESS;
 }
