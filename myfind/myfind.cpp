@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <cassert>
+#include <algorithm>
 
 /* globale Variable fuer den Programmnamen */
 char *program_name = nullptr;
