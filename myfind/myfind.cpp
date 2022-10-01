@@ -5,26 +5,13 @@
  */
 
 #include <getopt.h>
-#include <iostream>
 #include <vector>
-#include <istream>
 #include <string>
-#include <iostream>
-#include <filesystem>
 #include <dirent.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <iostream>
 #include <sys/wait.h>
-#include <unistd.h>
 #include <cassert>
-
-namespace fs = std::filesystem;
-
 
 /* globale Variable fuer den Programmnamen */
 char *program_name = nullptr;
@@ -32,14 +19,12 @@ char *program_name = nullptr;
 void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
                       bool &isRecursive, bool &ignoresCase, int error);
 
-bool contains(std::vector<std::string> &targets, const std::string &filename);
-
 std::string toLower(std::string &filename);
 
 void
 handleCase(std::string &targets, bool ignoresCase, std::string &originalFilename, std::string &filename01);
 
-void
+int
 traverseDirectory(const std::string &searchPath, std::string &targets, bool isRecursive, bool ignoresCase);
 
 /* Funktion print_usage() zur Ausgabe der usage Meldung */
@@ -61,57 +46,50 @@ int main(int argc, char *argv[]) {
 
     program_name = argv[0];
 
+    // Liest die Kommandozeilen-Parameter aus
     extractArguments(argc, argv, searchPath, targets, c, isRecursive, ignoresCase, error);
 
-
+    pid_t pid, wpid;
+    int status;
+    // Für jedes target wird nun ein fork erstellt. Der Kindproess sucht mit der Methode traverseDirectory nach Matches.
     for (auto &target: targets) {
-        pid_t pid, wpid;
-        int status;
 
         pid = fork();
 
 
-        switch (pid) {
-            case 1: /* error */
-                fprintf(stderr, "myfork: error when forking child process\n");
-                return EXIT_FAILURE;
-            case 0: /* child process */
-                traverseDirectory(searchPath, target, isRecursive, ignoresCase);
-                return 3;
-            default: /* parent */
-                while ((wpid = wait(&status)) != pid) {
-                    if (wpid != -1)
-                        continue; /* different child process has terminated, continue waiting */
-
-                    /* error waiting */
-                    fprintf(stderr, "myfork: error when waiting for child process\n");
-                    return EXIT_FAILURE;
-                }
-                /* check exit code of child after finishing */
-                if (WIFEXITED(status)) /* child has finished normally with exit code WEXITSTATUS(status) */
-                {
-                   // printf("Child has finished normally, exit code: %d\n", WEXITSTATUS(status));
-                } else /* child has finished with error */
-                {
-                    printf("Child process has finished with error or via signal\n");
-                }
+        if (pid == 0) {
+            // Child process returns result of traverseDirectory, therefore the code below will not be executed by the children
+            return traverseDirectory(searchPath, target, isRecursive, ignoresCase);
+        } else if (pid == -1) {
+            perror("Forking failed\n");
+            return EXIT_FAILURE;
         }
+
     }
 
 
+    // Wait for all children
+    while ((wpid = wait(&status)) > 0) {
+
+        /* check exit code of child after finishing */
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            // traverseDirectory failed and returned error code
+            perror("Error while waiting for child process\n");
+        }
+
+        if (wpid != -1)
+            continue; /* different child process has terminated, continue waiting */
 
 
-    //    for (const auto &entry: fs::directory_iterator(searchPath)) {
-//
-//        std::cout << std::to_string(pid) + ":" + entry.path().filename().string() << std::endl;
-//        printf("\n%d: %s", pid, entry.path().filename().c_str());
-//    }
+
+        return EXIT_FAILURE;
+    }
 
 
     return EXIT_SUCCESS;
 }
 
-void
+int
 traverseDirectory(const std::string &searchPath, std::string &target, bool isRecursive,
                   bool ignoresCase) {
     int pid = getpid();
@@ -122,8 +100,7 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
 
     if ((dirp = opendir(searchPath.c_str())) == nullptr) {
         perror("Failed to open directory");
-//        return 1;
-        return;
+        return EXIT_FAILURE;
     }
 
 
@@ -144,27 +121,26 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
 
         struct stat statbuf{};
         if (stat(fullPath.c_str(), &statbuf) == -1) {
-            perror("Failed to get file status");
+            return EXIT_FAILURE;
         } else {
             if (statbuf.st_mode & S_IFDIR) {
+                // It's a directory, traverse it recursively if user used -R
                 if (isRecursive) {
                     traverseDirectory(fullPath, target, isRecursive, ignoresCase);
                 }
-
-                //it's a directory
             } else if (statbuf.st_mode & S_IFREG) {
+                // It's a file, check if filename matches the target
                 if (target == filename01) {
                     printf("%d: %s: %s\n", pid, originalFilename.c_str(), fullPath.c_str());
-                } else {
-                    // DO NOTHING -- Nothing found
                 }
-            } else {
-                //something else
             }
 
         }
     }
     while ((closedir(dirp) == -1) && (errno == EINTR)) { ; }
+
+
+    return 0;
 }
 
 void handleCase(std::string &target, bool ignoresCase, std::string &originalFilename,
@@ -182,10 +158,6 @@ std::string toLower(std::string &filename) {
                    [](unsigned char c) { return tolower(c); });
 
     return copiedFilename;
-}
-
-bool contains(std::vector<std::string> &targets, const std::string &filename) {
-    return std::find(targets.begin(), targets.end(), filename) != targets.end();
 }
 
 void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
@@ -227,15 +199,18 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
     }
 
 
-    std::cout << "=============== Used arguments ===============" << std::endl;
-    std::cout << "isRecursive: " + std::to_string(isRecursive) << std::endl;
-    std::cout << "ignoresCase: " + std::to_string(ignoresCase) << std::endl;
-    std::cout << "searchPath: " + searchPath << std::endl;
-    std::cout << "\nTargets: " << std::endl;
+    /*
+     * I used this for debugging purposes
+     * std::cout << "=============== Used arguments ===============" << std::endl;
+       std::cout << "isRecursive: " + std::to_string(isRecursive) << std::endl;
+       std::cout << "ignoresCase: " + std::to_string(ignoresCase) << std::endl;
+       std::cout << "searchPath: " + searchPath << std::endl;
+       std::cout << "\nTargets: " << std::endl;
 
-    for (auto &target: targets) {
+        for (auto &target: targets) {
         std::cout << target << std::endl;
-    }
-    std::cout << "\n" << std::endl;
+        }
+        std::cout << "\n" << std::endl;
+     */
 
 }
