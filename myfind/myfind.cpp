@@ -78,7 +78,7 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
         print_usage();
     }
 
-    if ((argc < optind + 1)) {
+    if ((argc < optind + 2)) {
         /* falsche Anzahl an Optionen */
         print_usage();
     }
