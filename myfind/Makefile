@@ -1,5 +1,7 @@
+CFLAGS = -Wall -g
+
 all:
-	g++ myfind.cpp -o myfind
+	g++ $(CFLAGS) -o myfind myfind.cpp
 
 clean:
 	rm myfind
