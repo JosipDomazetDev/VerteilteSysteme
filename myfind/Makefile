@@ -1,7 +1,9 @@
+CC = g++
 CFLAGS = -Wall -g
+NAME = myfind
 
 all:
-	g++ $(CFLAGS) -o myfind myfind.cpp
+	$(CC) $(CFLAGS) -o $(NAME) $(NAME).cpp
 
 clean:
-	rm myfind
+	rm $(NAME)
