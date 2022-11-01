@@ -1,0 +1,4 @@
+/home/josip/Desktop/clion-2022.2.3/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/josip/Desktop/clion-2022.2.3/bin/ninja/linux/ninja -G Ninja -S /home/josip/Desktop/projects/VerteilteSysteme/twmailer -B /home/josip/Desktop/projects/VerteilteSysteme/twmailer/cmake-build-debug
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/josip/Desktop/projects/VerteilteSysteme/twmailer/cmake-build-debug

@@ -1,9 +1,12 @@
-CC = g++
-CFLAGS = -Wall -g
-NAME = twmailer
+CC=gcc
 
-all:
-	$(CC) $(CFLAGS) -o $(NAME) $(NAME).cpp
+all: server client
+
+server:
+	gcc server.c -o server.o
+
+client:
+	gcc client.c -o client.o
 
 clean:
-	rm $(NAME)
+	rm -f server.o client.o

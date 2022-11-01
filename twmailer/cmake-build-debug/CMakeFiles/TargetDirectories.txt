@@ -1,0 +1,3 @@
+/home/josip/Desktop/projects/VerteilteSysteme/twmailer/cmake-build-debug/CMakeFiles/twmailer.dir
+/home/josip/Desktop/projects/VerteilteSysteme/twmailer/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/josip/Desktop/projects/VerteilteSysteme/twmailer/cmake-build-debug/CMakeFiles/rebuild_cache.dir
