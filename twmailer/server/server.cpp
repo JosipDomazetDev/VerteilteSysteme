@@ -183,47 +183,64 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
     {
         handleRead(buffer, current_socket, size, directory, fileptr, error);
         return;
-    }
-    /* else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
+    } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
     {
-        handleDel(buffer, current_socket, directory, filename, error);
+        handleDel(buffer, current_socket, size, directory, error);
         return;
-    }*/
+    }
 }
 
-void Server::handleDel(char buffer[1024], const int *current_socket, const char *directory, char *filename,
+void Server::handleDel(char buffer[1024], const int *current_socket, long size, std::string &directory,
                        bool error) {
+
     bzero(buffer, BUF);
-    for (int i = 0; i < 2; i++) {
-        recv(*current_socket, buffer, BUF, 0);
-        printf("Information received: %s", buffer);
-        if (i == 0) {
-            buffer[strlen(buffer) - 1] = '\0';
-            strcpy(filename, directory);
-            strcat(filename, "/");
-            strcat(filename, buffer); // get path of username directory
-        } else if (i == 1) {
-            buffer[strlen(buffer) - 1] = '\0';
-            strcat(filename, "/");
-            strcat(filename, buffer); // get path of file (subject)
-            if (remove(filename))     // delete file
-            {
-                perror("Error when deleting file");
-                error = true;
-            } else {
-                printf("\nFile was deleted successfully!\n");
-            }
-        }
+    std::string username;
+    std::string message_id;
+    std::string userDirectoryPath = directory;
+    std::string filePath;
+    std::string complete_msg;
+
+    bzero(buffer, BUF);
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 0 -- username
+        buffer[strlen(buffer) - 1] = '\0';
+        username = buffer;
+    } else {
+        error = false;
     }
-    bzero(buffer, BUF);
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 1 -- message-id
+        buffer[strlen(buffer) - 1] = '\0';
+        message_id = buffer;
+    } else {
+        error = false;
+    }
+
+    userDirectoryPath.append("/");
+    userDirectoryPath.append(username);
+    filePath = userDirectoryPath;
+    filePath.append("/");
+    filePath.append(message_id);
+
+
+    if (remove(filePath.c_str()))     // delete file
+    {
+        perror("Error when deleting file");
+        error = true;
+    } else {
+        printf("\nFile was deleted successfully!\n");
+    }
+
     if (!error) {
         printf("\n\nEverything went well!\n");
-        strcat(buffer, "\nOK\n");
+        complete_msg = "\nOK\n";
     } else {
+        complete_msg = "ERR\n";
         printf("\n\nThere was an error!\n");
-        strcat(buffer, "ERR\n");
     }
-    if ((send(*current_socket, buffer, BUF, 0)) == -1) // send message
+    if ((send(*current_socket, complete_msg.c_str(), BUF, 0)) == -1) // send message
     {
         perror("del error");
     }

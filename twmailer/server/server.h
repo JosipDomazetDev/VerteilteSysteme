@@ -49,7 +49,6 @@ public:
 
 
 
-    static void handleDel(char *buffer, const int *current_socket, const char *directory, char *filename, bool error) ;
 
     static bool read_send_line(char *buffer, const int *current_socket, long size);
 
@@ -65,6 +64,8 @@ public:
     static void handleList(char *buffer, const int *current_socket, long size, std::string &directory, bool error);
 
     void handleRead(char *buffer, const int *current_socket, long size, std::string &directory, FILE *fptr, bool error) const;
+
+    static void handleDel(char *buffer, const int *current_socket, long size, std::string &directory, bool error);
 };
 
 #endif
