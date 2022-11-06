@@ -179,11 +179,12 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
     {
         handleList(buffer, current_socket, size, directory, error);
         return;
-    } /*else if (strncmp(buffer, "READ", 4) == 0) // read specific message
+    } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
     {
-        handleRead(buffer, current_socket, directory, filename, fileptr, error);
+        handleRead(buffer, current_socket, size, directory, fileptr, error);
         return;
-    } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
+    }
+    /* else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
     {
         handleDel(buffer, current_socket, directory, filename, error);
         return;
@@ -229,59 +230,65 @@ void Server::handleDel(char buffer[1024], const int *current_socket, const char 
     bzero(buffer, BUF);
 }
 
-void Server::handleRead(char buffer[1024], const int *current_socket, const char *directory, char *filename, FILE *fptr,
-                        bool error) {
-    char message[BUF];
+void Server::handleRead(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
+                        bool error) const {
+    std::string username;
+    std::string message_id;
+    std::string userDirectoryPath = directory;
+    std::string filePath;
+    std::string complete_msg;
+
     bzero(buffer, BUF);
-    bzero(filename, BUF);
-    for (int i = 0; i < 2; i++) {
-        recv(*current_socket, buffer, BUF, 0);
-        printf("Information received: %s", buffer);
-        if (i == 0) {
-            buffer[strlen(buffer) - 1] = '\0';
-            strcpy(filename, directory);
-            strcat(filename, "/");
-            strcat(filename, buffer); // get path of user directory
-        } else if (i == 1) {
-            buffer[strlen(buffer) - 1] = '\0';
-            strcat(filename, "/");
-            strcat(filename, buffer); // get path of specifc file (subject)
-            // printf("%s\n", filename);
-            fptr = fopen(filename, "r"); // open file to read
-            if (fptr == NULL) {
-                perror("Unable to open file");
-                error = true;
-            } else {
-                bzero(buffer, BUF);
-                printf("\n");
-                int j = 0;
-                while (fscanf(fptr, "%s", buffer) != EOF) // scan all lines
-                {
-                    printf("%s\n", buffer);
-                    if (j != 0) // save all lines except first one (=receiver)
-                    {
-                        strcat(message, buffer);
-                        strcat(message, "\n");
-                    }
-                    j = 1;
-                }
-            }
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 0 -- username
+        buffer[strlen(buffer) - 1] = '\0';
+        username = buffer;
+    } else {
+        error = false;
+    }
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 1 -- message-id
+        buffer[strlen(buffer) - 1] = '\0';
+        message_id = buffer;
+    } else {
+        error = false;
+    }
+
+    userDirectoryPath.append("/");
+    userDirectoryPath.append(username);
+    filePath = userDirectoryPath;
+    filePath.append("/");
+    filePath.append(message_id);
+
+    fptr = fopen(filePath.c_str(), "r"); // open file to read
+    if (fptr == nullptr) {
+        perror("Unable to open file");
+        error = true;
+    } else {
+        bzero(buffer, BUF);
+        printf("\n");
+        while (fscanf(fptr, "%s", buffer) != EOF) // scan all lines
+        {
+            printf("%s\n", buffer);
+            complete_msg.append(buffer);
+            complete_msg.append("\n");
         }
     }
+
     if (!error) {
         printf("\n\nEverything went well!\n");
-        strcat(message, "\nOK\n");
+        complete_msg.insert(0, "\nOK\n");
     } else {
         printf("\n\nThere was an error!\n");
-        bzero(message, BUF);
-        strcat(message, "ERR\n");
+        complete_msg = "ERR\n";
     }
-    if ((send(*current_socket, message, BUF, 0)) == -1) {
+
+    if ((send(*current_socket, complete_msg.c_str(), BUF, 0)) == -1) {
         perror("read error");
     }
     bzero(buffer, BUF);
-    bzero(message, BUF);
-    bzero(filename, BUF);
     fclose(fptr);
 }
 

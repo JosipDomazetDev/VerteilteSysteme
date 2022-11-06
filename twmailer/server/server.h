@@ -48,8 +48,6 @@ public:
     handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr);
 
 
-    static void handleRead(char *buffer, const int *current_socket, const char *directory, char *filename, FILE *fptr,
-                    bool error) ;
 
     static void handleDel(char *buffer, const int *current_socket, const char *directory, char *filename, bool error) ;
 
@@ -65,6 +63,8 @@ public:
 
 
     static void handleList(char *buffer, const int *current_socket, long size, std::string &directory, bool error);
+
+    void handleRead(char *buffer, const int *current_socket, long size, std::string &directory, FILE *fptr, bool error) const;
 };
 
 #endif
