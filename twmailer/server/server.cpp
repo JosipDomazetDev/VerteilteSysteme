@@ -41,7 +41,7 @@ bool Server::create_server_socket() {
 
 bool Server::check_dir() const {
     // Creating pointer of type dirent (all directory entries in specific directory)
-    DIR *directory = opendir(spoolDir);
+    DIR *directory = opendir(spoolDir.c_str());
     if (directory == nullptr) {
         // Directory could not be opened
         perror("Error when opening directory");
@@ -165,31 +165,30 @@ void Server::abort() {
 }
 
 // handles the handle_command functions (SEND, ...)
-void Server::handle_command(char buffer[BUF], int *current_socket) {
+void Server::handle_command(char buffer[BUF], int *current_socket) const {
 
     long size;
-    char *directory = spoolDir;
-    char filename[BUF];
-    FILE *fptr;
+    std::string directory = spoolDir;
+    FILE *fileptr;
     bool error = false; // check if error
 
     if (strncmp(buffer, "SEND", 4) == 0) {
-        handleSend(buffer, current_socket, size, directory, filename, fptr, error);
+        handleSend(buffer, current_socket, size, directory, fileptr);
         return;
-    } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
+    } /*else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
     {
         handleList(buffer, current_socket, size, directory, filename, error);
         return;
     } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
     {
-        handleRead(buffer, current_socket, directory, filename, fptr, error);
+        handleRead(buffer, current_socket, directory, filename, fileptr, error);
         return;
     } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
     {
         handleDel(buffer, current_socket, directory, filename, error);
         return;
-    }
-    }
+    }*/
+}
 
 void Server::handleDel(char buffer[1024], const int *current_socket, const char *directory, char *filename,
                        bool error) {
@@ -341,68 +340,129 @@ void Server::handleList(char buffer[1024], const int *current_socket, long size,
     bzero(c, BUF);
 }
 
-void Server::handleSend(char buffer[1024], const int *current_socket, long size, const char *directory, char *filename,
-                        FILE *fptr, bool error) {
-    char receiver[BUF]; // username of receiver
+void Server::handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr) {
+    std::string username;
+    std::string receiverUsername;
+    std::string subject;
+    std::string msg;
+
     bzero(buffer, BUF);
 
-    for (int i = 0; i < 4; i++) // receive all parts of send (sender, receiver, subject, message)
-    {
-        size = recv(*current_socket, buffer, BUF, 0);
-        if (size <= 0) {
-            perror("recv error");
-            break;
-        }
-        printf("Information received: %s", buffer);
+    std::string userDirectoryPath = directory;
+    std::string filePath;
 
-        if (i == 0) {
-            buffer[strlen(buffer) - 1] = '\0';
-            strcpy(filename, directory); // get path of directory for user
-            strcat(filename, "/");
-            strcat(filename, buffer);
-            // printf("filename: %s\n", filename);
-            if (mkdir(filename, 0777) == -1) // make directory
-            {
-                if (errno == EEXIST) // ignore error if directory already exists
-                {
-                } else {
-                    error = true; // all other errors set bool on true
-                }
-            }
-        } else if (i == 1 && error == false) {
-            strcpy(receiver, buffer); // save username of receiver
-            // printf("receiver: %s\n", receiver);
-        } else if (i == 2 && error == false) {
-            buffer[strlen(buffer) - 1] = '\0';
-            strcat(filename, "/");
-            strcat(filename, buffer); // get path for file (named after subject)
-            // printf("filename: %s\n", filename);
-            fptr = fopen(filename, "w"); // create file
-            if (fptr == NULL) {
-                printf("Unable to create file.\n");
-                error = true;
-            } else {
-                fputs(receiver, fptr); // print receiver into file
-            }
-        } else if (i == 3 && error == false) {
-            fputs(buffer, fptr); // print message into file
-            fclose(fptr);
-        }
-    }
+    bool isSuccessful = persist_message_from_send(buffer, current_socket, size, fptr, username, receiverUsername,
+                                                  subject, msg,
+                                                  userDirectoryPath,
+                                                  filePath);
 
-    bzero(filename, BUF);
-    // printf("filename1: %s\n", filename);
-    bzero(receiver, BUF);
+
     bzero(buffer, BUF);
-    if (!error) {
+
+    if (isSuccessful) {
         printf("\n\nEverything went well!\n");
         buffer = (char *) "OK\n";
     } else {
         printf("\n\nThere was an error!\n");
         buffer = (char *) "ERR\n";
     }
+
     if (send(*current_socket, buffer, BUF, 0) == -1) // send message to client
     {
         perror("send error");
     }
+}
+
+bool
+Server::persist_message_from_send(char buffer[1024], const int *current_socket, long size, FILE *fptr,
+                                  std::string &username,
+                                  std::string &receiverUsername, std::string &subject, std::string &msg,
+                                  std::string &userDirectoryPath, std::string &filePath) {
+    // Read the lines first
+    if (read_send_lines(buffer, current_socket, size, username, receiverUsername, subject, msg)) {
+
+        userDirectoryPath.append("/");
+        userDirectoryPath.append(username);
+
+        // make directory
+        if (mkdir(userDirectoryPath.c_str(), 0777) == -1) {
+            if (errno == EEXIST) // ignore error if directory already exists
+            {
+            } else {
+                return false;
+            }
+        }
+
+
+        filePath = userDirectoryPath;
+        filePath.append("/");
+        filePath.append(subject);
+
+        // create file
+        fptr = fopen(filePath.c_str(), "w");
+        if (fptr == nullptr) {
+            printf("Unable to create file.\n");
+            return false;
+        } else {
+            // write receiverUsername into file
+            fputs(receiverUsername.c_str(), fptr);
+        }
+
+        // write message into file
+        fputs(msg.c_str(), fptr);
+        fclose(fptr);
+        return true;
+    } else {
+        return false;
+    }
+
+}
+
+bool
+Server::read_send_lines(char buffer[1024], const int *current_socket, long size, std::string &username,
+                        std::string &receiverUsername, std::string &subject, std::string &msg) {
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 0 -- username
+        buffer[strlen(buffer) - 1] = '\0';
+        username = buffer;
+    } else {
+        return false;
+    }
+
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 1 -- receiverUsername
+        receiverUsername = buffer;
+    } else {
+        return false;
+    }
+
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 2 -- subject
+        buffer[strlen(buffer) - 1] = '\0';
+        subject = buffer;
+    } else {
+        return false;
+    }
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 3 -- msg
+        msg = buffer;
+    } else {
+        return false;
+    }
+
+
+    return true;
+}
+
+bool Server::read_send_line(char buffer[1024], const int *current_socket, long size) {
+    size = recv(*current_socket, buffer, BUF, 0);
+    if (size <= 0) {
+        perror("recv error");
+        return false;
+    }
+    return true;
 }

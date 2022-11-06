@@ -35,9 +35,9 @@ public:
     void start_listening();                             // wait for connections
     void abort();                                        // end connection
     void handle_client_communication(int *parameterSocket);      // communicate with client
-    void handle_command(char buffer[BUF], int *parameterSocket); // handles the handle_command functions (SEND, ...)
+    void handle_command(char buffer[BUF], int *parameterSocket) const; // handles the handle_command functions (SEND, ...)
     int port{};
-    char *spoolDir{}; // spool directory of handle_command
+    std::string spoolDir{}; // spool directory of handle_command
     bool check_dir() const;
 
     bool create_server_socket() const;
@@ -45,8 +45,7 @@ public:
     bool create_server_socket();
 
     static void
-    handleSend(char *buffer, const int *current_socket, long size, const char *directory, char *filename, FILE *fptr,
-               bool error) ;
+    handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr);
 
     static void handleList(char *buffer, const int *current_socket, long size, const char *directory, char *filename,
                     bool error) ;
@@ -55,6 +54,16 @@ public:
                     bool error) ;
 
     static void handleDel(char *buffer, const int *current_socket, const char *directory, char *filename, bool error) ;
+
+    static bool read_send_line(char *buffer, const int *current_socket, long size);
+
+
+    static bool read_send_lines(char *buffer, const int *current_socket, long size, std::string &username,
+                                std::string &receiverUsername, std::string &subject, std::string &msg);
+
+    static bool persist_message_from_send(char buffer[1024], const int *current_socket, long size, FILE *fptr, std::string &username,
+                                          std::string &receiverUsername, std::string &subject, std::string &msg,
+                                          std::string &userDirectoryPath, std::string &filePath);
 };
 
 #endif
