@@ -175,11 +175,11 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
     if (strncmp(buffer, "SEND", 4) == 0) {
         handleSend(buffer, current_socket, size, directory, fileptr);
         return;
-    } /*else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
+    } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
     {
-        handleList(buffer, current_socket, size, directory, filename, error);
+        handleList(buffer, current_socket, size, directory, error);
         return;
-    } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
+    } /*else if (strncmp(buffer, "READ", 4) == 0) // read specific message
     {
         handleRead(buffer, current_socket, directory, filename, fileptr, error);
         return;
@@ -285,59 +285,60 @@ void Server::handleRead(char buffer[1024], const int *current_socket, const char
     fclose(fptr);
 }
 
-void Server::handleList(char buffer[1024], const int *current_socket, long size, const char *directory, char *filename,
+void Server::handleList(char buffer[1024], const int *current_socket, long size, std::string &directory,
                         bool error) {
-    char subjects[BUF];
-    bzero(subjects, BUF);
-    char c[BUF];
-    bzero(c, BUF);
+    std::string userDirectoryPath = directory;
+    std::string username;
+    std::string subjects;
+    std::string complete_msg;
     int count = 0;
-    bzero(buffer, BUF);
-    size = recv(*current_socket, buffer, BUF, 0); // receive username
-    if (size <= 0) {
-        perror("list error");
-    }
-    printf("Username received: %s\n", buffer);
 
-    buffer[strlen(buffer) - 1] = '\0';
-    strcpy(filename, directory);
-    strcat(filename, "/");
-    strcat(filename, buffer); // get path of directory of user
+    bzero(buffer, BUF);
+    if (read_send_line(buffer, current_socket, size)) {
+        // 0 -- username
+        buffer[strlen(buffer) - 1] = '\0';
+        username = buffer;
+    }
+
+    printf("Username received: %s\n", buffer);
+    userDirectoryPath.append("/");
+    userDirectoryPath.append(username);
 
     DIR *dir;
     struct dirent *ent;
-    if ((dir = opendir(filename)) != NULL) {
-        while ((ent = readdir(dir)) != NULL) {
+    if ((dir = opendir(userDirectoryPath.c_str())) != nullptr) {
+
+        while ((ent = readdir(dir)) != nullptr) {
             if (ent->d_name[0] != '.' &&
                 ent->d_name[strlen(ent->d_name) - 1] != '~') // get all files except  ., .., hidden files
             {
-                count++;                       // count files
-                strcat(subjects, ent->d_name); // save them all into subjects
-                strcat(subjects, "\n");
+                // save all subjects to string
+                subjects.append(ent->d_name);
+                subjects.append("\n");
+                // count files
+                count++;
             }
         }
-        sprintf(c, "%d", count); // convert count int into char array
-        strcat(c, "\n");
-        strcat(c, subjects); // concenate count and subjects
-        bzero(subjects, BUF);
+        complete_msg.append(std::to_string(count));
+        complete_msg.append("\n");
+        complete_msg.append(subjects);
+
         closedir(dir);
     } else {
         perror("Error when opening directory");
-        error = true;
     }
-    printf("Subjects:\n%s", c);
 
     if (count == 0 || error) {
-        bzero(c, BUF);
-        strcat(c, "0\n"); // when no user or files -> 0
+        complete_msg = "0\n";
     }
 
-    if (send(*current_socket, c, BUF, 0) == -1) // send message
+    printf("Subjects:\n%s", complete_msg.c_str());
+
+
+    if (send(*current_socket, complete_msg.c_str(), BUF, 0) == -1) // send message
     {
         perror("list error");
     }
-    bzero(filename, BUF);
-    bzero(c, BUF);
 }
 
 void Server::handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr) {

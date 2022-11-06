@@ -47,8 +47,6 @@ public:
     static void
     handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr);
 
-    static void handleList(char *buffer, const int *current_socket, long size, const char *directory, char *filename,
-                    bool error) ;
 
     static void handleRead(char *buffer, const int *current_socket, const char *directory, char *filename, FILE *fptr,
                     bool error) ;
@@ -64,6 +62,9 @@ public:
     static bool persist_message_from_send(char buffer[1024], const int *current_socket, long size, FILE *fptr, std::string &username,
                                           std::string &receiverUsername, std::string &subject, std::string &msg,
                                           std::string &userDirectoryPath, std::string &filePath);
+
+
+    static void handleList(char *buffer, const int *current_socket, long size, std::string &directory, bool error);
 };
 
 #endif
