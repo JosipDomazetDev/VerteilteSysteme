@@ -104,7 +104,7 @@ void Server::start_listening() {
 }
 
 // communicate with client
-void Server::handle_client_communication(int *current_socket) {
+void Server::handle_client_communication(int *current_socket) const {
     char buffer[BUF];
     long size;
 
@@ -140,6 +140,7 @@ void Server::handle_client_communication(int *current_socket) {
     }
 }
 
+
 // end connection
 void Server::abort() {
     abortRequested = true;
@@ -164,6 +165,20 @@ void Server::abort() {
     }
 }
 
+std::string gen_random(const int len) {
+    static const char alphanum[] =
+            "0123456789"
+            "abcdefghijklmnopqrstuvwxyz";
+    std::string tmp_s;
+    tmp_s.reserve(len);
+
+    for (int i = 0; i < len; ++i) {
+        tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+
+    return tmp_s;
+}
+
 // handles the handle_command functions (SEND, ...)
 void Server::handle_command(char buffer[BUF], int *current_socket) const {
 
@@ -176,7 +191,7 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
         handle_send(buffer, current_socket, size, directory, fileptr);
     } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
     {
-        handle_list(buffer, current_socket, size, directory, error);
+        handle_list(buffer, current_socket, size, directory, fileptr, error);
     } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
     {
         handle_read(buffer, current_socket, size, directory, fileptr, error);
@@ -305,10 +320,11 @@ void Server::handle_read(char buffer[1024], const int *current_socket, long size
     fclose(fptr);
 }
 
-void Server::handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory,
+void Server::handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
                          bool error) {
     std::string userDirectoryPath = directory;
     std::string username;
+    std::vector<std::string> message_ids;
     std::string subjects;
     std::string complete_msg;
     int count = 0;
@@ -324,6 +340,7 @@ void Server::handle_list(char buffer[1024], const int *current_socket, long size
     userDirectoryPath.append("/");
     userDirectoryPath.append(username);
 
+    // First get all message_ids (filenames)
     DIR *dir;
     struct dirent *ent;
     if ((dir = opendir(userDirectoryPath.c_str())) != nullptr) {
@@ -332,28 +349,57 @@ void Server::handle_list(char buffer[1024], const int *current_socket, long size
             if (ent->d_name[0] != '.' &&
                 ent->d_name[strlen(ent->d_name) - 1] != '~') // get all files except  ., .., hidden files
             {
-                // save all subjects to string
-                subjects.append(ent->d_name);
-                subjects.append("\n");
-                // count files
-                count++;
+                message_ids.emplace_back(ent->d_name);
             }
         }
-        complete_msg.append(std::to_string(count));
-        complete_msg.append("\n");
-        complete_msg.append(subjects);
-
         closedir(dir);
     } else {
         perror("Error when opening directory");
     }
+
+    std::string filePath;
+
+    // After that open the files and get the subjects
+    for (const std::string &message_id: message_ids) {
+        filePath = userDirectoryPath;
+        filePath.append("/");
+        filePath.append(message_id);
+
+        fptr = fopen(filePath.c_str(), "r"); // open file to read
+        if (fptr == nullptr) {
+            perror("Unable to open file");
+            error = true;
+        } else {
+            bzero(buffer, BUF);
+            printf("\n");
+            int i = 0;
+            while (fscanf(fptr, "%s", buffer) != EOF) // scan all lines
+            {
+                if (i == 2) {
+                    // Third line in file is the subject
+                    printf("%s\n", buffer);
+                    subjects.append(buffer);
+                    subjects.append("\n");
+
+                    // count subjects
+                    count++;
+                }
+
+                i++;
+            }
+        }
+    }
+
+
+    complete_msg.append(std::to_string(count));
+    complete_msg.append("\n");
+    complete_msg.append(subjects);
 
     if (count == 0 || error) {
         complete_msg = "0\n";
     }
 
     printf("Subjects:\n%s", complete_msg.c_str());
-
 
     if (send(*current_socket, complete_msg.c_str(), BUF, 0) == -1) // send message
     {
@@ -417,7 +463,8 @@ Server::persist_message_from_send(char buffer[1024], const int *current_socket, 
 
         filePath = userDirectoryPath;
         filePath.append("/");
-        filePath.append(subject);
+        std::string msg_id = gen_random(MSG_ID_LENGTH);
+        filePath.append(msg_id);
 
         // create file
         fptr = fopen(filePath.c_str(), "w");
@@ -425,8 +472,12 @@ Server::persist_message_from_send(char buffer[1024], const int *current_socket, 
             printf("Unable to create file.\n");
             return false;
         } else {
-            // write receiverUsername into file
+            username.append("\n");
+            subject.append("\n");
+
+            fputs(username.c_str(), fptr);
             fputs(receiverUsername.c_str(), fptr);
+            fputs(subject.c_str(), fptr);
         }
 
         // write message into file

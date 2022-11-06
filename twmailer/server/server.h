@@ -6,10 +6,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <signal.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <csignal>
+#include <vector>
 #include <cstddef>
 #include <iostream>
 #include <cstring>
@@ -17,10 +18,10 @@
 #include <dirent.h>
 
 #define BUF 1024
+#define MSG_ID_LENGTH 12
 #define MSGSIZE 11
 
-class Server
-{
+class Server {
 private:
     int create_socket = -1;                 // socket descriptor (server)
     bool abortRequested = false;            // to check if request has been aborted
@@ -31,11 +32,13 @@ private:
 
 public:
     Server();
+
     bool init();                                        // create server socket and bind to ip
     void start_listening();                             // wait for connections
     void abort();                                        // end connection
-    void handle_client_communication(int *parameterSocket);      // communicate with client
-    void handle_command(char buffer[BUF], int *parameterSocket) const; // handles the handle_command functions (SEND, ...)
+    void handle_client_communication(int *parameterSocket) const;      // communicate with client
+    void
+    handle_command(char buffer[BUF], int *parameterSocket) const; // handles the handle_command functions (SEND, ...)
     int port{};
     std::string spoolDir{}; // spool directory of handle_command
     bool check_dir() const;
@@ -46,22 +49,23 @@ public:
     handle_send(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr);
 
 
-
-
     static bool read_send_line(char *buffer, const int *current_socket, long size);
 
 
     static bool read_send_lines(char *buffer, const int *current_socket, long size, std::string &username,
                                 std::string &receiverUsername, std::string &subject, std::string &msg);
 
-    static bool persist_message_from_send(char buffer[1024], const int *current_socket, long size, FILE *fptr, std::string &username,
+    static bool persist_message_from_send(char buffer[1024], const int *current_socket, long size, FILE *fptr,
+                                          std::string &username,
                                           std::string &receiverUsername, std::string &subject, std::string &msg,
                                           std::string &userDirectoryPath, std::string &filePath);
 
 
-    static void handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory, bool error);
+    static void handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
+                            bool error);
 
-    static void handle_read(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr, bool error) ;
+    static void handle_read(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
+                            bool error);
 
     static void handle_del(char buffer[1024], const int *current_socket, long size, std::string &directory, bool error);
 };
