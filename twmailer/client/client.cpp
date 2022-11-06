@@ -192,6 +192,15 @@ void Client::handle_list()  {
 
 }
 
+
+
+bool isValidUsername(const std::string& str)
+{
+    std::string criteria("abcdefghijklmnopqrstuvwxyz0123456789\n");
+    // only 8 characters
+    return (std::string::npos == str.find_first_not_of(criteria)) && str.length() <= 8;
+}
+
 void Client::handle_send() {
     if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'SEND' to server
     {
@@ -201,22 +210,24 @@ void Client::handle_send() {
     {
         bzero(buffer, BUF); // clear buffer
         if (i == 0 || i == 1) {
-            std::string str;
-            bool valid_user = true;
+            std::string username;
+            bool is_valid_username;
+
             do {
-                valid_user = true;
-                fgets(buffer, BUF, stdin); // only 8 characters
-                str = buffer;
-                if (str.find_first_not_of(
-                        "abcdefghijklmnopqrstuvwxyz" // username is supposed to be only a-z, 0-9
-                        "0123456789"
-                        "\n") != std::string::npos ||
-                    strlen(buffer) > 9) // 8 + \n
+                fgets(buffer, BUF, stdin);
+                username = buffer;
+                printf("%s", username.c_str());
+
+                is_valid_username = isValidUsername(username);
+                printf("%s", std::to_string(isValidUsername(username)).c_str());
+
+
+                if (!is_valid_username)
                 {
-                    valid_user = false;
                     printf("Please enter valid username (a-z, 0-9)!\n");
                 }
-            } while (!valid_user);
+            } while (!is_valid_username);
+
         } else if (i == 2) // subject max 80
         {
             fgets(buffer, 80, stdin);
@@ -227,6 +238,8 @@ void Client::handle_send() {
         } else {
             fgets(buffer, BUF, stdin);
         }
+
+
         if ((send(create_socket, buffer, sizeof(buffer), 0)) == -1) // send to server
         {
             perror("send error");
