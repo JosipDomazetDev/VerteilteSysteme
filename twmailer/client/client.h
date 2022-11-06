@@ -34,6 +34,22 @@ public:
     void mailer();        // handles the mailer functions (SEND, ...)
     int port{};
     char *serverIP{};
+
+    void handle_send() const;
+
+    void handle_list() const;
+
+    void handle_del() const;
+
+    void handle_read() const;
+
+    void handle_read();
+
+    void handle_send();
+
+    void handle_list();
+
+    void handle_del();
 };
 
 #endif

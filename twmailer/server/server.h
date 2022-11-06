@@ -43,7 +43,7 @@ public:
     bool create_server_socket();
 
     static void
-    handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr);
+    handle_send(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr);
 
 
 
@@ -59,11 +59,11 @@ public:
                                           std::string &userDirectoryPath, std::string &filePath);
 
 
-    static void handleList(char *buffer, const int *current_socket, long size, std::string &directory, bool error);
+    static void handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory, bool error);
 
-    void handleRead(char *buffer, const int *current_socket, long size, std::string &directory, FILE *fptr, bool error) const;
+    static void handle_read(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr, bool error) ;
 
-    static void handleDel(char *buffer, const int *current_socket, long size, std::string &directory, bool error);
+    static void handle_del(char buffer[1024], const int *current_socket, long size, std::string &directory, bool error);
 };
 
 #endif

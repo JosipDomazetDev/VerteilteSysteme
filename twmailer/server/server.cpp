@@ -173,21 +173,21 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
     bool error = false; // check if error
 
     if (strncmp(buffer, "SEND", 4) == 0) {
-        handleSend(buffer, current_socket, size, directory, fileptr);
+        handle_send(buffer, current_socket, size, directory, fileptr);
     } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
     {
-        handleList(buffer, current_socket, size, directory, error);
+        handle_list(buffer, current_socket, size, directory, error);
     } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
     {
-        handleRead(buffer, current_socket, size, directory, fileptr, error);
+        handle_read(buffer, current_socket, size, directory, fileptr, error);
     } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
     {
-        handleDel(buffer, current_socket, size, directory, error);
+        handle_del(buffer, current_socket, size, directory, error);
     }
 }
 
-void Server::handleDel(char buffer[1024], const int *current_socket, long size, std::string &directory,
-                       bool error) {
+void Server::handle_del(char buffer[1024], const int *current_socket, long size, std::string &directory,
+                        bool error) {
 
     bzero(buffer, BUF);
     std::string username;
@@ -243,8 +243,8 @@ void Server::handleDel(char buffer[1024], const int *current_socket, long size, 
     bzero(buffer, BUF);
 }
 
-void Server::handleRead(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
-                        bool error) const {
+void Server::handle_read(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
+                         bool error) {
     std::string username;
     std::string message_id;
     std::string userDirectoryPath = directory;
@@ -305,8 +305,8 @@ void Server::handleRead(char buffer[1024], const int *current_socket, long size,
     fclose(fptr);
 }
 
-void Server::handleList(char buffer[1024], const int *current_socket, long size, std::string &directory,
-                        bool error) {
+void Server::handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory,
+                         bool error) {
     std::string userDirectoryPath = directory;
     std::string username;
     std::string subjects;
@@ -361,7 +361,7 @@ void Server::handleList(char buffer[1024], const int *current_socket, long size,
     }
 }
 
-void Server::handleSend(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr) {
+void Server::handle_send(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr) {
     std::string username;
     std::string receiverUsername;
     std::string subject;
