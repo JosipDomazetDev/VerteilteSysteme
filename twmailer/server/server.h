@@ -40,8 +40,6 @@ public:
     std::string spoolDir{}; // spool directory of handle_command
     bool check_dir() const;
 
-    bool create_server_socket() const;
-
     bool create_server_socket();
 
     static void

@@ -16,15 +16,15 @@
 
 #define MAXLINE 1500
 #define BUF 1024
-//#define PORT 6543
+//#define port 6543
 
 class Client
 {
 private:
-    int create_socket; // socket descriptor (client)
-    char buffer[BUF];
-    struct sockaddr_in address; // socket addr structure
-    int size;
+    int create_socket{}; // socket descriptor (client)
+    char buffer[BUF]{};
+    struct sockaddr_in address{}; // socket addr structure
+    long size{};
     bool isQuit = false; // check if client chose quit option
 
 public:
@@ -32,8 +32,8 @@ public:
     bool start();         // create client socket
     void connectServer(); // connect to server and communicate
     void mailer();        // handles the mailer functions (SEND, ...)
-    int PORT;
-    char *serverIP;
+    int port{};
+    char *serverIP{};
 };
 
 #endif

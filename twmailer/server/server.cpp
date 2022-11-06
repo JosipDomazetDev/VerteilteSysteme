@@ -167,26 +167,22 @@ void Server::abort() {
 // handles the handle_command functions (SEND, ...)
 void Server::handle_command(char buffer[BUF], int *current_socket) const {
 
-    long size;
+    long size = 0;
     std::string directory = spoolDir;
-    FILE *fileptr;
+    FILE *fileptr = nullptr;
     bool error = false; // check if error
 
     if (strncmp(buffer, "SEND", 4) == 0) {
         handleSend(buffer, current_socket, size, directory, fileptr);
-        return;
     } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
     {
         handleList(buffer, current_socket, size, directory, error);
-        return;
     } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
     {
         handleRead(buffer, current_socket, size, directory, fileptr, error);
-        return;
     } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
     {
         handleDel(buffer, current_socket, size, directory, error);
-        return;
     }
 }
 
