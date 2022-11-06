@@ -42,6 +42,10 @@ public:
     void handle_list();
 
     void handle_del();
+
+    void extractUsername();
+
+    void sendBuffer() const;
 };
 
 #endif
