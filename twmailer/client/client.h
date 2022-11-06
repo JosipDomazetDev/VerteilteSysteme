@@ -18,8 +18,7 @@
 #define BUF 1024
 //#define port 6543
 
-class Client
-{
+class Client {
 private:
     int create_socket{}; // socket descriptor (client)
     char buffer[BUF]{};
@@ -29,19 +28,12 @@ private:
 
 public:
     Client();
+
     bool start();         // create client socket
     void connectServer(); // connect to server and communicate
     void mailer();        // handles the mailer functions (SEND, ...)
     int port{};
     char *serverIP{};
-
-    void handle_send() const;
-
-    void handle_list() const;
-
-    void handle_del() const;
-
-    void handle_read() const;
 
     void handle_read();
 

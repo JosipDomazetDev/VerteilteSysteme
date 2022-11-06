@@ -74,19 +74,23 @@ void Client::mailer() {
 
         if (strncmp(buffer, "SEND", 4) == 0) {
             handle_send();
+            return;
         } else if (strncmp(buffer, "LIST", 4) == 0) {
             handle_list();
+            return;
         } else if (strncmp(buffer, "READ", 4) == 0) {
             handle_read();
+            return;
         } else if (strncmp(buffer, "DEL", 3) == 0) {
             handle_del();
+            return;
         } else if (strncmp(buffer, "QUIT", 4) == 0) // no server respond
         {
             isQuit = true;
             return;
         }
     }
-    }
+}
 
 void Client::handle_read()  {
     if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'READ' to server
