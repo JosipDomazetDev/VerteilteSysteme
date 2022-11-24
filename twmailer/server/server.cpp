@@ -72,6 +72,8 @@ void Server::start_listening() {
         return;
     }
 
+    std::vector<std::thread> threads;
+
     while (!abortRequested) {
         printf("Waiting for connections...\n");
 
@@ -85,10 +87,16 @@ void Server::start_listening() {
         // Start client
         printf("Client connected from %s:%d...\n", inet_ntoa(cliaddress.sin_addr), ntohs(cliaddress.sin_port));
 
-        socketA = new_socket;
-        handle_client_communication(&socketA);
+        std::thread new_thread(&Server::handle_client_communication, this, &new_socket);
+        threads.push_back(std::move(new_thread));
+    }
 
-        new_socket = -1;
+
+    //join all threads
+    auto originalthread = threads.begin();
+    while (originalthread != threads.end()) {
+        originalthread->join();
+        originalthread++;
     }
 
     // frees the descriptor
@@ -104,15 +112,17 @@ void Server::start_listening() {
 }
 
 // communicate with client
-void Server::handle_client_communication(int *current_socket) const {
+void Server::handle_client_communication(int *current_socket) {
     char buffer[BUF];
     long size;
+    int current_socket_new = *current_socket;
+    *current_socket = -1;
 
     do {
         printf("-------------------- \n");
         // RECEIVE from client
         bzero(buffer, BUF); // clear buffer
-        size = recv(*current_socket, buffer, BUF, 0);
+        size = recv(current_socket_new, buffer, BUF, 0);
         if (size == -1) {
             if (abortRequested) {
                 perror("recv error after aborted");
@@ -125,18 +135,18 @@ void Server::handle_client_communication(int *current_socket) const {
             break;
         }
         printf("\nMessage received: %s\n", buffer);
-        handle_command(buffer, current_socket);
+        handle_command(buffer, current_socket_new);
     } while (strcmp(buffer, "quit") != 0 && !abortRequested);
 
     // closes/frees the descriptor if not already
-    if (*current_socket != -1) {
-        if (shutdown(*current_socket, SHUT_RDWR) == -1) {
+    if (current_socket_new != -1) {
+        if (shutdown(current_socket_new, SHUT_RDWR) == -1) {
             perror("shutdown new_socket");
         }
-        if (close(*current_socket) == -1) {
+        if (close(current_socket_new) == -1) {
             perror("close new_socket");
         }
-        *current_socket = -1;
+        current_socket_new = -1;
     }
 }
 
@@ -180,7 +190,7 @@ std::string gen_random(const int len) {
 }
 
 // handles the handle_command functions (SEND, ...)
-void Server::handle_command(char buffer[BUF], int *current_socket) const {
+void Server::handle_command(char buffer[BUF], int current_socket) {
 
     long size = 0;
     std::string directory = spoolDir;
@@ -188,8 +198,10 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
     bool error = false; // check if error
 
     if (strncmp(buffer, "SEND", 4) == 0) {
+        m.lock();
         handle_send(buffer, current_socket, size, directory, fileptr);
-    } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
+        m.unlock();
+    }else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
     {
         handle_list(buffer, current_socket, size, directory, fileptr, error);
     } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
@@ -197,11 +209,15 @@ void Server::handle_command(char buffer[BUF], int *current_socket) const {
         handle_read(buffer, current_socket, size, directory, fileptr, error);
     } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
     {
+        m.lock();
         handle_del(buffer, current_socket, size, directory, error);
+        m.unlock();
+    }else {
+        printf("\n\nUnknown Command %s\n", buffer);
     }
 }
 
-void Server::handle_del(char buffer[1024], const int *current_socket, long size, std::string &directory,
+void Server::handle_del(char buffer[1024], int current_socket, long size, std::string &directory,
                         bool error) {
 
     bzero(buffer, BUF);
@@ -251,14 +267,14 @@ void Server::handle_del(char buffer[1024], const int *current_socket, long size,
         complete_msg = "ERR\n";
         printf("\n\nThere was an error!\n");
     }
-    if ((send(*current_socket, complete_msg.c_str(), BUF, 0)) == -1) // send message
+    if ((send(current_socket, complete_msg.c_str(), BUF, 0)) == -1) // send message
     {
         perror("del error");
     }
     bzero(buffer, BUF);
 }
 
-void Server::handle_read(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
+void Server::handle_read(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
                          bool error) {
     std::string username;
     std::string message_id;
@@ -313,14 +329,14 @@ void Server::handle_read(char buffer[1024], const int *current_socket, long size
         complete_msg = "ERR\n";
     }
 
-    if ((send(*current_socket, complete_msg.c_str(), BUF, 0)) == -1) {
+    if ((send(current_socket, complete_msg.c_str(), BUF, 0)) == -1) {
         perror("read error");
     }
     bzero(buffer, BUF);
     fclose(fptr);
 }
 
-void Server::handle_list(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr,
+void Server::handle_list(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
                          bool error) {
     std::string userDirectoryPath = directory;
     std::string username;
@@ -401,13 +417,13 @@ void Server::handle_list(char buffer[1024], const int *current_socket, long size
 
     printf("Subjects:\n%s", complete_msg.c_str());
 
-    if (send(*current_socket, complete_msg.c_str(), BUF, 0) == -1) // send message
+    if (send(current_socket, complete_msg.c_str(), BUF, 0) == -1) // send message
     {
         perror("list error");
     }
 }
 
-void Server::handle_send(char buffer[1024], const int *current_socket, long size, std::string &directory, FILE *fptr) {
+void Server::handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr) {
     std::string username;
     std::string receiverUsername;
     std::string subject;
@@ -434,14 +450,14 @@ void Server::handle_send(char buffer[1024], const int *current_socket, long size
         buffer = (char *) "ERR\n";
     }
 
-    if (send(*current_socket, buffer, BUF, 0) == -1) // send message to client
+    if (send(current_socket, buffer, BUF, 0) == -1) // send message to client
     {
         perror("send error");
     }
 }
 
 bool
-Server::persist_message_from_send(char buffer[1024], const int *current_socket, long size, FILE *fptr,
+Server::persist_message_from_send(char buffer[1024], int current_socket, long size, FILE *fptr,
                                   std::string &username,
                                   std::string &receiverUsername, std::string &subject, std::string &msg,
                                   std::string &userDirectoryPath, std::string &filePath) {
@@ -488,10 +504,8 @@ Server::persist_message_from_send(char buffer[1024], const int *current_socket, 
         return false;
     }
 
-}
-
 bool
-Server::read_send_lines(char buffer[1024], const int *current_socket, long size, std::string &username,
+Server::read_send_lines(char buffer[1024], int current_socket, long size, std::string &username,
                         std::string &receiverUsername, std::string &subject, std::string &msg) {
 
     if (read_send_line(buffer, current_socket, size)) {
@@ -530,8 +544,8 @@ Server::read_send_lines(char buffer[1024], const int *current_socket, long size,
     return true;
 }
 
-bool Server::read_send_line(char buffer[1024], const int *current_socket, long size) {
-    size = recv(*current_socket, buffer, BUF, 0);
+bool Server::read_send_line(char buffer[1024], int current_socket, long size) {
+    size = recv(current_socket, buffer, BUF, 0);
     if (size <= 0) {
         perror("recv error");
         return false;
