@@ -10,12 +10,12 @@ Ldap::Ldap() {
     this->ldapSearchBaseDomainComponent = "dc=technikum-wien,dc=at";
     this->ldapSearchScope = LDAP_SCOPE_SUBTREE;
 }
-void Ldap::inputUser(string username, string password) {
+void Ldap::inputUser(std::string username, std::string password) {
     //Set username and password
     this->rawLdapUser = std::move(username);
     this->ldapBindPassword = std::move(password);
     this->ldapBindUser = "uid=" + this->rawLdapUser + ",ou=people,dc=technikum-wien,dc=at";
-    string filter = "(uid="+ this->rawLdapUser+ ")";
+    std::string filter = "(uid="+ this->rawLdapUser+ ")";
     this->ldapSearchFilter = filter;
 }
 void Ldap::setupLdap() {
@@ -23,19 +23,19 @@ void Ldap::setupLdap() {
     // Connect to server
     rc = ldap_initialize(&this->ldapHandle, this->ldapUri);
     if (rc != LDAP_SUCCESS) {
-        cout << "ldap failed" << endl;
+        std::cout << "ldap failed" << std::endl;
         exit(EXIT_FAILURE);
     }
-    cout << "connected to LDAP server"<< this->ldapUri << endl;
+    std::cout << "connected to LDAP server"<< this->ldapUri << std::endl;
     rc = ldap_set_option(this->ldapHandle, LDAP_OPT_PROTOCOL_VERSION, &this->ldapVersion);
     if (rc != LDAP_OPT_SUCCESS) {
-        cout << "ldap_set_option(PROTOCOL_VERSION):"<<ldap_err2string(rc)<<endl;
+        std::cout << "ldap_set_option(PROTOCOL_VERSION):"<<ldap_err2string(rc)<<std::endl;
         ldap_unbind_ext_s(this->ldapHandle, nullptr, nullptr);
         exit(EXIT_FAILURE);
     }
     rc = ldap_start_tls_s(this->ldapHandle, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
-        cout << "ldap_start_tls_s():"<<ldap_err2string(rc) << endl;
+        std::cout << "ldap_start_tls_s():"<<ldap_err2string(rc) << std::endl;
         ldap_unbind_ext_s(this->ldapHandle, nullptr, nullptr);
         exit(EXIT_FAILURE);
     }
@@ -48,11 +48,11 @@ void Ldap::ldapSearch() {
     const char* ldapSearchResultAttributes[] = { "uid", "cn", nullptr };
     rc = ldap_search_ext_s(this->ldapHandle, this->ldapSearchBaseDomainComponent, this->ldapSearchScope, this->ldapSearchFilter.c_str(), (char**)ldapSearchResultAttributes, 0, nullptr, nullptr, nullptr, 500, &searchResult);
     if (rc != LDAP_SUCCESS) {
-        cout << "LDAP search error:"<<ldap_err2string(rc) << endl;
+        std::cout << "LDAP search error:"<<ldap_err2string(rc) << std::endl;
         ldap_unbind_ext_s(this->ldapHandle, nullptr, nullptr);
         exit(EXIT_FAILURE);
     }
-    cout << "Total results:" << ldap_count_entries(this->ldapHandle, searchResult) << endl;
+    std::cout << "Total results:" << ldap_count_entries(this->ldapHandle, searchResult) << std::endl;
     LDAPMessage* searchResultEntry;
     searchResultEntry = ldap_first_entry(this->ldapHandle, searchResult);
 
@@ -68,7 +68,7 @@ void Ldap::ldapSearch() {
         {
             for (int i = 0; i < ldap_count_values_len(vals); i++)
             {
-                cout << "\t" << searchResultEntryAttribute << ":" << vals[i]->bv_val << endl;
+                std::cout << "\t" << searchResultEntryAttribute << ":" << vals[i]->bv_val << std::endl;
             }
             ldap_value_free_len(vals);
         }
@@ -80,7 +80,7 @@ void Ldap::ldapSearch() {
         ber_free(ber, 0);
     }
 
-    cout << endl;
+    std::cout << std::endl;
 
     // free memory
     ldap_msgfree(searchResult);
@@ -94,7 +94,7 @@ bool Ldap::bindCredentials() {
     BerValue* servercredp;
     rc = ldap_sasl_bind_s(this->ldapHandle, this->ldapBindUser.c_str(), LDAP_SASL_SIMPLE, &bindCredentials, nullptr, nullptr, &servercredp);
     if (rc != LDAP_SUCCESS) {
-        cout << "LDAP bind error:"<<ldap_err2string(rc) << endl;
+        std::cout << "LDAP bind error:"<<ldap_err2string(rc) << std::endl;
         ldap_unbind_ext_s(this->ldapHandle, nullptr, nullptr);
         return false;
     }

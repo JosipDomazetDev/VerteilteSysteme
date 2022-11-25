@@ -1,3 +1,7 @@
+#include <map>
+#include <unordered_map>
+#include <list>
+#include <fstream>
 #include "server.h"
 #include "ldap.h"
 #include "ldap.cpp"
@@ -89,7 +93,8 @@ void Server::start_listening() {
         // Start client
         printf("Client connected from %s:%d...\n", inet_ntoa(cliaddress.sin_addr), ntohs(cliaddress.sin_port));
 
-        std::thread new_thread(&Server::handle_client_communication, this, &new_socket);
+        std::string client_ip = inet_ntoa(cliaddress.sin_addr);
+        std::thread new_thread(&Server::handle_client_communication, this, &new_socket, client_ip);
         threads.push_back(std::move(new_thread));
     }
 
@@ -113,16 +118,77 @@ void Server::start_listening() {
     }
 }
 
+// for string delimiter
+std::vector<std::string> split(const std::string &s, const std::string &delimiter) {
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    std::string token;
+    std::vector<std::string> res;
+
+    while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos) {
+        token = s.substr(pos_start, pos_end - pos_start);
+        pos_start = pos_end + delim_len;
+        res.push_back(token);
+    }
+
+    res.push_back(s.substr(pos_start));
+    return res;
+}
+
 // communicate with client
-void Server::handle_client_communication(int *current_socket) {
+void Server::handle_client_communication(int *current_socket, const std::string &client_ip) {
     char buffer[BUF];
     long size;
     int current_socket_new = *current_socket;
     *current_socket = -1;
     std::string username;
+    int failedLoginAttempts = 0;
+    bool blocked = false;
+    std::ifstream blacklist_stream;
+
 
     do {
         printf("-------------------- \n");
+
+        blacklist_stream.open("blacklist.txt");
+        std::list<std::string> blacklist_lines;
+        std::string line;
+
+        while (getline(blacklist_stream, line)) {
+            blacklist_lines.emplace_back(line);
+        }
+
+        // Reverse to have most recent on top
+        blacklist_lines.reverse();
+
+        for (const auto &blacklist_line: blacklist_lines) {
+
+            long blacklist_timestamp = std::stol(split(blacklist_line, " ")[0]);
+            std::string ip = split(blacklist_line, " ")[1];
+            std::string user = split(blacklist_line, " ")[2];
+
+            if (client_ip.compare(ip)) {
+                // Found latest entry
+                unsigned long int timestamp = std::time(nullptr);
+                // User has already been blocked long enough
+                if (timestamp - blacklist_timestamp > 60) {
+                    blocked = false;
+                } else {
+                    // Otherwise block should still be ongoing
+                    blocked = true;
+                    failedLoginAttempts = 0;
+                }
+
+                break;
+            }
+        }
+
+        blacklist_stream.close();
+
+        if (blocked) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            continue;
+        }
+
         // RECEIVE from client
         bzero(buffer, BUF); // clear buffer
         size = recv(current_socket_new, buffer, BUF, 0);
@@ -138,7 +204,7 @@ void Server::handle_client_communication(int *current_socket) {
             break;
         }
         printf("\nMessage received: %s\n", buffer);
-        handle_command(buffer, current_socket_new, username);
+        handle_command(buffer, current_socket_new, username, client_ip, failedLoginAttempts, blocked);
     } while (strcmp(buffer, "quit") != 0 && !abortRequested);
 
     // closes/frees the descriptor if not already
@@ -193,20 +259,18 @@ std::string gen_random(const int len) {
 }
 
 // handles the handle_command functions (SEND, ...)
-void Server::handle_command(char buffer[1024], int parameterSocket, std::string &username) {
+void
+Server::handle_command(char buffer[1024], int parameterSocket, std::string &username, const std::string &client_ip,
+                       int &failedLoginAttempts, bool &blocked) {
 
     long size = 0;
     std::string directory = spoolDir;
     FILE *fileptr = nullptr;
     bool error = false; // check if error
 
-    printf("%s", "----------------");
-    printf("%s", buffer);
-    printf("%s", username.c_str());
-    printf("%d", strncmp(buffer, "LOGIN", 5) == 0);
-
     if (strncmp(buffer, "LOGIN", 5) == 0) {
-        username = handle_login(buffer, parameterSocket, size, directory, fileptr, error);
+        username = handle_login(buffer, parameterSocket, size, directory, fileptr, error, client_ip,
+                                failedLoginAttempts, blocked);
     } else {
         if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "LIST", 4) == 0 || strncmp(buffer, "READ", 4) == 0 ||
             strncmp(buffer, "DEL", 3) == 0) {
@@ -243,7 +307,8 @@ void Server::handle_command(char buffer[1024], int parameterSocket, std::string 
 }
 
 std::string
-Server::handle_login(char buffer[1024], int current_socket, long size, string &directory, FILE *fptr, bool error) {
+Server::handle_login(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
+                     const std::string client_ip, int &failedLoginAttempts, bool &blocked) {
     std::string username;
     std::string password;
 
@@ -286,26 +351,41 @@ Server::handle_login(char buffer[1024], int current_socket, long size, string &d
     } else {
         // Login failed
 
-        if (send(current_socket, "ERR", BUF, 0) == -1) {
-            perror("send error");
+
+        failedLoginAttempts++;
+
+        if (failedLoginAttempts >= 3 && !blocked) {
+            //if 3 failed attempts block ip
+            if (send(current_socket, "ERR - Too many attempts, ip blocked for 60 seconds", BUF, 0) == -1) {
+                perror("send error");
+            }
+
+            // create file
+            fptr = fopen("blacklist.txt", "a");
+            if (fptr == nullptr) {
+                printf("Unable to create file.\n");
+            } else {
+                unsigned long int timestamp = std::time(nullptr);
+                std::string blacklist_line = std::to_string(timestamp) + " " + username + " " + client_ip + "\n";
+
+                fputs(blacklist_line.c_str(), fptr);
+                blocked = true;
+            }
+
+            fclose(fptr);
+        }else {
+            if (send(current_socket, "ERR", BUF, 0) == -1) {
+                perror("send error");
+            }
         }
 
+        // Return "" as username to indicate that session is not authenticated
         return "";
-        /*  if (failed > 1 && !blocked) // if 3 failed attempts block ip
-          {
-              printf("Client is blocked!\n");
-              auto start = chrono::system_clock::now(); // take current time
-              time_t starttime = chrono::system_clock::to_time_t(start);
-              blocklist << IP << " : " << ctime(&starttime) << endl; // write in blocklist.txt ip and time
-              blocked = true;
-              return;
-          }
-          failed++;*/
     }
 }
 
 void Server::handle_del(char buffer[1024], int current_socket, long size, std::string &directory, bool error,
-                        const std::string& username) {
+                        const std::string &username) {
 
     bzero(buffer, BUF);
     std::string message_id;
@@ -354,7 +434,7 @@ void Server::handle_del(char buffer[1024], int current_socket, long size, std::s
 
 void
 Server::handle_read(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
-                    const std::string& username) {
+                    const std::string &username) {
     std::string message_id;
     std::string userDirectoryPath = directory;
     std::string filePath;
@@ -408,7 +488,7 @@ Server::handle_read(char buffer[1024], int current_socket, long size, std::strin
 
 void
 Server::handle_list(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
-                    const std::string& username) {
+                    const std::string &username) {
     std::string userDirectoryPath = directory;
     std::vector<std::string> message_ids;
     std::string subjects;
@@ -570,7 +650,6 @@ Server::persist_message_from_send(char buffer[1024], int current_socket, long si
 bool
 Server::read_send_lines(char buffer[1024], int current_socket, long size, std::string &username,
                         std::string &receiverUsername, std::string &subject, std::string &msg) {
-
 
 
     if (read_send_line(buffer, current_socket, size)) {

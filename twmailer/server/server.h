@@ -18,6 +18,8 @@
 #include <dirent.h>
 #include <thread>
 #include <mutex>
+#include <iterator>
+#include <map>
 
 #define BUF 1024
 #define MSG_ID_LENGTH 12
@@ -30,7 +32,6 @@ private:
     socklen_t addr_length{};                      // size of addr structur
     struct sockaddr_in address{}, cliaddress{}; // socket addr structure
     int new_socket = -1;                    // socket descriptor (client)
-    int socketA{};
     std::mutex m;
 
 public:
@@ -39,12 +40,13 @@ public:
     bool init();                                        // create server socket and bind to ip
     void start_listening();                             // wait for connections
     void abort();                                        // end connection
-    void handle_client_communication(int *current_socket_new);      // communicate with client
+    void handle_client_communication(int *current_socket_new, const std::string& client_ip);      // communicate with client
     void
-    handle_command(char buffer[1024], int parameterSocket, std::string &username); // handles the handle_command functions (SEND, ...)
+    handle_command(char buffer[1024], int parameterSocket, std::string &username, const std::string &client_ip,
+                   int &failedLoginAttempts, bool &blocked); // handles the handle_command functions (SEND, ...)
     int port{};
     std::string spoolDir{}; // spool directory of handle_command
-    bool check_dir() const;
+    [[nodiscard]] bool check_dir() const;
 
     bool create_server_socket();
 
@@ -52,7 +54,8 @@ public:
     handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
                 std::string string);
     static std::string
-    handle_login(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error);
+    handle_login(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
+                 const std::string client_ip, int &failedLoginAttempts, bool &blocked);
 
 
     static bool read_send_line(char *buffer, int current_socket, long size);
