@@ -49,8 +49,9 @@ public:
     bool create_server_socket();
 
     void
-    handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr);
-    std::string
+    handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
+                std::string string);
+    static std::string
     handle_login(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error);
 
 
@@ -66,13 +67,16 @@ public:
                                           std::string &userDirectoryPath, std::string &filePath);
 
 
-    static void handle_list(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
-                            bool error);
+    static void
+    handle_list(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
+                const std::string& string);
 
-    static void handle_read(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
-                            bool error);
+    static void
+    handle_read(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
+                const std::string& string);
 
-    void handle_del(char buffer[1024], int current_socket, long size, std::string &directory, bool error);
+    void handle_del(char buffer[1024], int current_socket, long size, std::string &directory, bool error,
+                    const std::string& string);
 };
 
 #endif

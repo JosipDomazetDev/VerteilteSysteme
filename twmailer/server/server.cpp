@@ -223,18 +223,18 @@ void Server::handle_command(char buffer[1024], int parameterSocket, std::string 
 
         if (strncmp(buffer, "SEND", 4) == 0) {
             m.lock();
-            handle_send(buffer, parameterSocket, size, directory, fileptr);
+            handle_send(buffer, parameterSocket, size, directory, fileptr, username);
             m.unlock();
         } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
         {
-            handle_list(buffer, parameterSocket, size, directory, fileptr, error);
+            handle_list(buffer, parameterSocket, size, directory, fileptr, error, username);
         } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
         {
-            handle_read(buffer, parameterSocket, size, directory, fileptr, error);
+            handle_read(buffer, parameterSocket, size, directory, fileptr, error, username);
         } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
         {
             m.lock();
-            handle_del(buffer, parameterSocket, size, directory, error);
+            handle_del(buffer, parameterSocket, size, directory, error, username);
             m.unlock();
         } else {
             printf("\n\nUnknown Command %s\n", buffer);
@@ -256,7 +256,7 @@ Server::handle_login(char buffer[1024], int current_socket, long size, string &d
     }
 
     if (read_send_line(buffer, current_socket, size)) {
-        // 1 -- message-id
+        // 1 -- pw
         buffer[strlen(buffer) - 1] = '\0';
         password = buffer;
     } else {
@@ -275,13 +275,13 @@ Server::handle_login(char buffer[1024], int current_socket, long size, string &d
     loginld.inputUser(username, password);
 
     // bind credentials and to check if valid
-    if (loginld.bindcredentials()) {
+    if (loginld.bindCredentials()) {
         // Login successful
 
         if (send(current_socket, "OK", BUF, 0) == -1) {
             perror("send error");
         }
-        loginld.ldapsearch(); // if valid start ldapsearch
+        loginld.ldapSearch(); // if valid start ldapSearch
         return username;
     } else {
         // Login failed
@@ -304,11 +304,10 @@ Server::handle_login(char buffer[1024], int current_socket, long size, string &d
     }
 }
 
-void Server::handle_del(char buffer[1024], int current_socket, long size, std::string &directory,
-                        bool error) {
+void Server::handle_del(char buffer[1024], int current_socket, long size, std::string &directory, bool error,
+                        const std::string& username) {
 
     bzero(buffer, BUF);
-    std::string username;
     std::string message_id;
     std::string userDirectoryPath = directory;
     std::string filePath;
@@ -317,15 +316,7 @@ void Server::handle_del(char buffer[1024], int current_socket, long size, std::s
     bzero(buffer, BUF);
 
     if (read_send_line(buffer, current_socket, size)) {
-        // 0 -- username
-        buffer[strlen(buffer) - 1] = '\0';
-        username = buffer;
-    } else {
-        error = false;
-    }
-
-    if (read_send_line(buffer, current_socket, size)) {
-        // 1 -- message-id
+        // 0 -- message-id
         buffer[strlen(buffer) - 1] = '\0';
         message_id = buffer;
     } else {
@@ -361,9 +352,9 @@ void Server::handle_del(char buffer[1024], int current_socket, long size, std::s
     bzero(buffer, BUF);
 }
 
-void Server::handle_read(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
-                         bool error) {
-    std::string username;
+void
+Server::handle_read(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
+                    const std::string& username) {
     std::string message_id;
     std::string userDirectoryPath = directory;
     std::string filePath;
@@ -372,15 +363,7 @@ void Server::handle_read(char buffer[1024], int current_socket, long size, std::
     bzero(buffer, BUF);
 
     if (read_send_line(buffer, current_socket, size)) {
-        // 0 -- username
-        buffer[strlen(buffer) - 1] = '\0';
-        username = buffer;
-    } else {
-        error = false;
-    }
-
-    if (read_send_line(buffer, current_socket, size)) {
-        // 1 -- message-id
+        // 0 -- message-id
         buffer[strlen(buffer) - 1] = '\0';
         message_id = buffer;
     } else {
@@ -423,23 +406,15 @@ void Server::handle_read(char buffer[1024], int current_socket, long size, std::
     fclose(fptr);
 }
 
-void Server::handle_list(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
-                         bool error) {
+void
+Server::handle_list(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error,
+                    const std::string& username) {
     std::string userDirectoryPath = directory;
-    std::string username;
     std::vector<std::string> message_ids;
     std::string subjects;
     std::string complete_msg;
     int count = 0;
 
-    bzero(buffer, BUF);
-    if (read_send_line(buffer, current_socket, size)) {
-        // 0 -- username
-        buffer[strlen(buffer) - 1] = '\0';
-        username = buffer;
-    }
-
-    printf("Username received: %s\n", buffer);
     userDirectoryPath.append("/");
     userDirectoryPath.append(username);
 
@@ -510,8 +485,8 @@ void Server::handle_list(char buffer[1024], int current_socket, long size, std::
     }
 }
 
-void Server::handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr) {
-    std::string username;
+void Server::handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr,
+                         std::string username) {
     std::string receiverUsername;
     std::string subject;
     std::string msg;
@@ -596,17 +571,10 @@ bool
 Server::read_send_lines(char buffer[1024], int current_socket, long size, std::string &username,
                         std::string &receiverUsername, std::string &subject, std::string &msg) {
 
-    if (read_send_line(buffer, current_socket, size)) {
-        // 0 -- username
-        buffer[strlen(buffer) - 1] = '\0';
-        username = buffer;
-    } else {
-        return false;
-    }
 
 
     if (read_send_line(buffer, current_socket, size)) {
-        // 1 -- receiverUsername
+        // 0 -- receiverUsername
         receiverUsername = buffer;
     } else {
         return false;
@@ -614,7 +582,7 @@ Server::read_send_lines(char buffer[1024], int current_socket, long size, std::s
 
 
     if (read_send_line(buffer, current_socket, size)) {
-        // 2 -- subject
+        // 1 -- subject
         buffer[strlen(buffer) - 1] = '\0';
         subject = buffer;
     } else {
@@ -622,7 +590,7 @@ Server::read_send_lines(char buffer[1024], int current_socket, long size, std::s
     }
 
     if (read_send_line(buffer, current_socket, size)) {
-        // 3 -- msg
+        // 2 -- msg
         msg = buffer;
     } else {
         return false;

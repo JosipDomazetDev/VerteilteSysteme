@@ -130,18 +130,10 @@ void Client::handle_read() {
     {
         perror("send error");
     }
-    for (int i = 0; i < 2; i++) // send all parts of read
-    {
-        bzero(buffer, BUF);
-        if (i == 0) {
-            extractUsername();
-        } else {
-            // message-id
-            fgets(buffer, BUF, stdin);
-        }
-
-        sendBuffer();
-    }
+    bzero(buffer, BUF);
+    // message-id
+    fgets(buffer, BUF, stdin);
+    sendBuffer();
 }
 
 
@@ -150,18 +142,11 @@ void Client::handle_del() {
     {
         perror("send error");
     }
-    for (int i = 0; i < 2; i++) // send all parts of del
-    {
-        bzero(buffer, BUF);
-        if (i == 0) {
-            extractUsername();
-        } else {
-            // message-id
-            fgets(buffer, BUF, stdin);
-        }
 
-        sendBuffer();
-    }
+    bzero(buffer, BUF);
+    // message-id
+    fgets(buffer, BUF, stdin);
+    sendBuffer();
 }
 
 void Client::handle_list() {
@@ -169,10 +154,6 @@ void Client::handle_list() {
     {
         perror("send error");
     }
-    bzero(buffer, BUF);
-
-    extractUsername();
-    sendBuffer();
 }
 
 void Client::handle_login() {
@@ -201,16 +182,16 @@ void Client::handle_send() {
     {
         perror("send error");
     }
-    for (int i = 0; i < 4; i++) // send all parts of send
+    for (int i = 0; i < 3; i++) // send all parts of send
     {
         bzero(buffer, BUF); // clear buffer
-        if (i == 0 || i == 1) {
-            // username & recipient
+        if (i == 0) {
+            // recipient
             extractUsername();
-        } else if (i == 2) {
+        } else if (i == 1) {
             // subject max 80
             fgets(buffer, 80, stdin);
-        } else if (i == 3) {
+        } else if (i == 2) {
             // message ends with dot
             std::cin.getline(buffer, BUF, '.');
             std::cin.ignore(); // ignore /n after dot
