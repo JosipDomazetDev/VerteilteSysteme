@@ -65,13 +65,17 @@ void Client::connectServer() {
 
 // handles the mailer functions (SEND, ...)
 void Client::mailer() {
-    printf("--------------------\n[Commands]\n SEND\n LIST\n READ\n DEL\n QUIT\n--------------------\n");
+    printf("--------------------\n[Commands]\n LOGIN\n SEND\n LIST\n READ\n DEL\n QUIT\n--------------------\n");
 
     while (true) // while no accepted input by client
     {
         bzero(buffer, BUF);        // clear buffer
         fgets(buffer, BUF, stdin); // get client input
 
+        if (strncmp(buffer, "LOGIN", 5) == 0) {
+            handle_login();
+            return;
+        }
         if (strncmp(buffer, "SEND", 4) == 0) {
             handle_send();
             return;
@@ -93,14 +97,13 @@ void Client::mailer() {
 }
 
 
-bool isValidUsername(const std::string& str)
-{
+bool isValidUsername(const std::string &str) {
     std::string criteria("abcdefghijklmnopqrstuvwxyz0123456789\n");
     // only 8 characters
-    return (std::string::npos == str.find_first_not_of(criteria)) && str.length() <= 8;
+    return (std::string::npos == str.find_first_not_of(criteria)) && str.length() <= 9;
 }
 
-void Client::extractUsername()  {
+void Client::extractUsername() {
     std::string username;
     bool is_valid_username;
 
@@ -109,9 +112,8 @@ void Client::extractUsername()  {
         username = buffer;
         is_valid_username = isValidUsername(username);
 
-        if (!is_valid_username)
-        {
-            printf("Please enter valid username (a-z, 0-9) (<=8 characters)!\n");
+        if (!is_valid_username) {
+            printf("Please enter valid username (a-z, 0-9) (<=9 characters)!\n");
         }
     } while (!is_valid_username);
 }
@@ -123,7 +125,7 @@ void Client::sendBuffer() const {
 }
 
 
-void Client::handle_read()  {
+void Client::handle_read() {
     if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'READ' to server
     {
         perror("send error");
@@ -143,7 +145,7 @@ void Client::handle_read()  {
 }
 
 
-void Client::handle_del()  {
+void Client::handle_del() {
     if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'DEL' to server
     {
         perror("send error");
@@ -162,7 +164,7 @@ void Client::handle_del()  {
     }
 }
 
-void Client::handle_list()  {
+void Client::handle_list() {
     if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'LIST' to server
     {
         perror("send error");
@@ -173,6 +175,26 @@ void Client::handle_list()  {
     sendBuffer();
 }
 
+void Client::handle_login() {
+    if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'LOGIN' to server
+    {
+        perror("send error");
+    }
+    for (int i = 0; i < 2; i++) // send all parts of login
+    {
+        bzero(buffer, BUF); // clear buffer
+        if (i == 0) {
+            // username & recipient
+            extractUsername();
+        } else {
+            // password
+            fgets(buffer, BUF, stdin);
+        }
+
+        sendBuffer();
+    }
+    bzero(buffer, BUF);
+}
 
 void Client::handle_send() {
     if ((send(create_socket, buffer, BUF, 0)) == -1) // send 'SEND' to server
@@ -185,12 +207,10 @@ void Client::handle_send() {
         if (i == 0 || i == 1) {
             // username & recipient
             extractUsername();
-        } else if (i == 2)
-        {
+        } else if (i == 2) {
             // subject max 80
             fgets(buffer, 80, stdin);
-        } else if (i == 3)
-        {
+        } else if (i == 3) {
             // message ends with dot
             std::cin.getline(buffer, BUF, '.');
             std::cin.ignore(); // ignore /n after dot

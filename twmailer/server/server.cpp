@@ -1,4 +1,6 @@
 #include "server.h"
+#include "ldap.h"
+#include "ldap.cpp"
 
 Server::Server() = default;
 
@@ -117,6 +119,7 @@ void Server::handle_client_communication(int *current_socket) {
     long size;
     int current_socket_new = *current_socket;
     *current_socket = -1;
+    std::string username;
 
     do {
         printf("-------------------- \n");
@@ -135,7 +138,7 @@ void Server::handle_client_communication(int *current_socket) {
             break;
         }
         printf("\nMessage received: %s\n", buffer);
-        handle_command(buffer, current_socket_new);
+        handle_command(buffer, current_socket_new, username);
     } while (strcmp(buffer, "quit") != 0 && !abortRequested);
 
     // closes/frees the descriptor if not already
@@ -190,30 +193,114 @@ std::string gen_random(const int len) {
 }
 
 // handles the handle_command functions (SEND, ...)
-void Server::handle_command(char buffer[BUF], int current_socket) {
+void Server::handle_command(char buffer[1024], int parameterSocket, std::string &username) {
 
     long size = 0;
     std::string directory = spoolDir;
     FILE *fileptr = nullptr;
     bool error = false; // check if error
 
-    if (strncmp(buffer, "SEND", 4) == 0) {
-        m.lock();
-        handle_send(buffer, current_socket, size, directory, fileptr);
-        m.unlock();
-    }else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
-    {
-        handle_list(buffer, current_socket, size, directory, fileptr, error);
-    } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
-    {
-        handle_read(buffer, current_socket, size, directory, fileptr, error);
-    } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
-    {
-        m.lock();
-        handle_del(buffer, current_socket, size, directory, error);
-        m.unlock();
-    }else {
-        printf("\n\nUnknown Command %s\n", buffer);
+    printf("%s", "----------------");
+    printf("%s", buffer);
+    printf("%s", username.c_str());
+    printf("%d", strncmp(buffer, "LOGIN", 5) == 0);
+
+    if (strncmp(buffer, "LOGIN", 5) == 0) {
+        username = handle_login(buffer, parameterSocket, size, directory, fileptr, error);
+    } else {
+        if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "LIST", 4) == 0 || strncmp(buffer, "READ", 4) == 0 ||
+            strncmp(buffer, "DEL", 3) == 0) {
+            // SEND LIST READ and DEL require authentication now
+            if (username.empty()) {
+                // Not authenticated
+                if (send(parameterSocket, "ERR - NOT AUTHENTICATED", BUF, 0) == -1) {
+                    perror("send error");
+                }
+
+                return;
+            }
+        }
+
+        if (strncmp(buffer, "SEND", 4) == 0) {
+            m.lock();
+            handle_send(buffer, parameterSocket, size, directory, fileptr);
+            m.unlock();
+        } else if (strncmp(buffer, "LIST", 4) == 0) // list all subjects of a user
+        {
+            handle_list(buffer, parameterSocket, size, directory, fileptr, error);
+        } else if (strncmp(buffer, "READ", 4) == 0) // read specific message
+        {
+            handle_read(buffer, parameterSocket, size, directory, fileptr, error);
+        } else if (strncmp(buffer, "DEL", 3) == 0) // delete specific file (subject)
+        {
+            m.lock();
+            handle_del(buffer, parameterSocket, size, directory, error);
+            m.unlock();
+        } else {
+            printf("\n\nUnknown Command %s\n", buffer);
+        }
+    }
+}
+
+std::string
+Server::handle_login(char buffer[1024], int current_socket, long size, string &directory, FILE *fptr, bool error) {
+    std::string username;
+    std::string password;
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 0 -- username
+        buffer[strlen(buffer) - 1] = '\0';
+        username = buffer;
+    } else {
+        error = false;
+    }
+
+    if (read_send_line(buffer, current_socket, size)) {
+        // 1 -- message-id
+        buffer[strlen(buffer) - 1] = '\0';
+        password = buffer;
+    } else {
+        error = false;
+    }
+
+    if (error) {
+        if (send(current_socket, "ERR", BUF, 0) == -1) {
+            perror("send error");
+        }
+        return "";
+    }
+
+    Ldap loginld;
+    loginld.setupLdap();
+    loginld.inputUser(username, password);
+
+    // bind credentials and to check if valid
+    if (loginld.bindcredentials()) {
+        // Login successful
+
+        if (send(current_socket, "OK", BUF, 0) == -1) {
+            perror("send error");
+        }
+        loginld.ldapsearch(); // if valid start ldapsearch
+        return username;
+    } else {
+        // Login failed
+
+        if (send(current_socket, "ERR", BUF, 0) == -1) {
+            perror("send error");
+        }
+
+        return "";
+        /*  if (failed > 1 && !blocked) // if 3 failed attempts block ip
+          {
+              printf("Client is blocked!\n");
+              auto start = chrono::system_clock::now(); // take current time
+              time_t starttime = chrono::system_clock::to_time_t(start);
+              blocklist << IP << " : " << ctime(&starttime) << endl; // write in blocklist.txt ip and time
+              blocked = true;
+              return;
+          }
+          failed++;*/
     }
 }
 
@@ -503,6 +590,7 @@ Server::persist_message_from_send(char buffer[1024], int current_socket, long si
     } else {
         return false;
     }
+}
 
 bool
 Server::read_send_lines(char buffer[1024], int current_socket, long size, std::string &username,

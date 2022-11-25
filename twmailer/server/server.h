@@ -41,7 +41,7 @@ public:
     void abort();                                        // end connection
     void handle_client_communication(int *current_socket_new);      // communicate with client
     void
-    handle_command(char buffer[BUF], int parameterSocket); // handles the handle_command functions (SEND, ...)
+    handle_command(char buffer[1024], int parameterSocket, std::string &username); // handles the handle_command functions (SEND, ...)
     int port{};
     std::string spoolDir{}; // spool directory of handle_command
     bool check_dir() const;
@@ -50,6 +50,8 @@ public:
 
     void
     handle_send(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr);
+    std::string
+    handle_login(char buffer[1024], int current_socket, long size, std::string &directory, FILE *fptr, bool error);
 
 
     static bool read_send_line(char *buffer, int current_socket, long size);

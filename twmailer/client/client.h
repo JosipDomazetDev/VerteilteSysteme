@@ -43,6 +43,8 @@ public:
 
     void handle_del();
 
+    void handle_login();
+
     void extractUsername();
 
     void sendBuffer() const;
