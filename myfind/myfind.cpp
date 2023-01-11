@@ -17,7 +17,7 @@
 /* globale Variable fuer den Programmnamen */
 char *program_name = nullptr;
 
-void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
+void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector <std::string> &targets, int c,
                       bool &isRecursive, bool &ignoresCase, int error);
 
 std::string toLower(std::string &filename);
@@ -53,7 +53,7 @@ void handleCase(std::string &target, bool ignoresCase, std::string &originalFile
     }
 }
 
-void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector<std::string> &targets, int c,
+void extractArguments(int argc, char *argv[], std::string &searchPath, std::vector <std::string> &targets, int c,
                       bool &isRecursive, bool &ignoresCase, int error) {
     while ((c = getopt(argc, argv, "iR")) != EOF) {
         switch (c) {
@@ -114,6 +114,15 @@ void extractArguments(int argc, char *argv[], std::string &searchPath, std::vect
 
 }
 
+std::string get_current_directory() {
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+        return std::string(cwd);
+    } else {
+        return "Error getting current working directory";
+    }
+}
+
 int
 traverseDirectory(const std::string &searchPath, std::string &target, bool isRecursive,
                   bool ignoresCase) {
@@ -167,7 +176,10 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
                 // It's a file, check if filename matches the target
                 if (target == sanitizedFilename) {
                     // We have a match -- print it
-                    printf("%d: %s: %s\n", pid, originalFilename.c_str(), fullPath.c_str());
+                    std::string pwd = get_current_directory();
+                    pwd.append("/");
+                    pwd.append(fullPath);
+                    printf("%d: %s: %s\n", pid, originalFilename.c_str(), pwd.c_str());
                 }
             }
 
@@ -182,7 +194,7 @@ traverseDirectory(const std::string &searchPath, std::string &target, bool isRec
 /* main Funktion mit Argumentbehandlung */
 int main(int argc, char *argv[]) {
     std::string searchPath;
-    std::vector<std::string> targets = {};
+    std::vector <std::string> targets = {};
 
     int c = 0;
     bool isRecursive = false;
